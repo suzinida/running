@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>러닝 기록 시스템</title>
+  <title>러닝 기록 프로그램</title>
   <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -153,8 +153,6 @@
       gap: 8px;
       margin-bottom: 15px;
     }
-
-    /* 통계 카드 (메인) */
     .stats {
       background: linear-gradient(135deg, #f0f7ff 0%, #e3f2fd 100%);
       border: 3px solid #4285F4;
@@ -208,7 +206,6 @@
       color: #34A853;
       font-size: 16px;
     }
-
     .section {
       background: #f9f9f9;
       border: 0.5px solid #e0e0e0;
@@ -330,7 +327,7 @@
       font-size: 16px;
       font-weight: bold;
       color: #4285F4;
-      min-width: 50px;
+      min-width: 80px;
     }
     .session-period {
       width: 50px;
@@ -453,7 +450,6 @@
     <button id="stopBtn" onclick="stopCamera()" disabled>중지</button>
   </div>
 
-  <!-- 통계 카드 (메인) -->
   <div id="stats" class="stats" style="display:none;">
     <div class="stats-icon" id="statsIcon">📍</div>
     <div class="stats-title" id="statsTitle">기다중...</div>
@@ -472,7 +468,6 @@
   </div>
 </div>
 
-<!-- 모드 선택 모달 -->
 <div id="modeModal" class="modal">
   <div class="modal-content">
     <div class="modal-header">
@@ -480,13 +475,12 @@
       <p style="font-size: 12px;">세션 코드와 운동 모드를 설정하세요</p>
     </div>
     
-    <!-- 세션 코드 섹션 -->
     <div class="session-code-section">
       <div class="session-code-label">세션 설정</div>
       <div class="session-code-input">
         <div class="session-date" id="sessionDateDisplay">09월 09일</div>
         <div style="display: flex; align-items: center; gap: 8px;">
-          <input type="number" id="periodInput" class="session-period" placeholder="1" min="1" max="8" inputmode="numeric">
+          <input type="number" id="periodInput" class="session-period" placeholder="1" min="1" max="8" inputmode="numeric" onInput="updateConfirmButtonState()">
           <div style="font-size: 14px; color: #4285F4; font-weight: bold; min-width: 40px;">교시</div>
         </div>
       </div>
@@ -495,7 +489,6 @@
       </div>
     </div>
     
-    <!-- 운동 모드 선택 -->
     <div class="mode-buttons">
       <div class="mode-btn" id="maxDistanceBtn" onclick="selectMode('maxDistance')">
         <div class="emoji">📏</div>
@@ -511,7 +504,7 @@
     
     <div id="distanceInputGroup" class="input-group" style="display:none;">
       <label for="maxDistanceInput">목표 거리 (km):</label>
-      <input type="number" id="maxDistanceInput" placeholder="예: 10" min="1" step="0.5">
+      <input type="number" id="maxDistanceInput" placeholder="예: 10" min="1" step="0.5" onInput="updateConfirmButtonState()">
     </div>
     
     <div class="modal-buttons">
@@ -532,47 +525,16 @@
   let qrCooldown = false;
   let scanLoopInterval = null;
   
-  // 이전 통계 화면 저장
   let previousStatsState = null;
   
-  // 세션 설정
   let currentSessionId = null;
   let sessionMode = null;
   let maxDistance = null;
   let endedStudents = {};
   
-  // 네트워크
   let isOnline = navigator.onLine;
+  let selectedMode = null;
 
-  // ================================================
-  // 초기화: 날짜 표시 및 입력 이벤트
-  // ================================================
-  function initSessionCodeDisplay() {
-    const today = new Date();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const date = String(today.getDate()).padStart(2, '0');
-    const dateCode = month + date;  // 0909
-    const dateDisplay = `${month}월 ${parseInt(date)}일`;  // 09월 9일 형식
-    
-    document.getElementById('sessionDateDisplay').textContent = dateDisplay;
-    document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
-    
-    // 교시 입력 이벤트
-    document.getElementById('periodInput').addEventListener('input', (e) => {
-      const period = e.target.value;
-      if (period) {
-        document.getElementById('sessionCodeDisplay').textContent = dateCode + period;
-      } else {
-        document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
-      }
-      // 확인 버튼 상태 업데이트
-      updateConfirmButtonState();
-    });
-  }
-
-  // ================================================
-  // 네트워크 상태
-  // ================================================
   window.addEventListener('online', () => {
     isOnline = true;
     updateNetworkStatus();
@@ -594,9 +556,6 @@
     }
   }
 
-  // ================================================
-  // 통신 (재시도 로직)
-  // ================================================
   async function fetchWithRetry(url, retries = 3) {
     for (let i = 0; i < retries; i++) {
       try {
@@ -629,9 +588,6 @@
     }
   }
 
-  // ================================================
-  // 페이스 계산 (분/km)
-  // ================================================
   function calculatePace(totalSeconds, distance) {
     if (distance === 0) return null;
     
@@ -642,9 +598,6 @@
     return `${paceMin}'${String(paceSec).padStart(2, '0')}"/km`;
   }
 
-  // ================================================
-  // 총시간 계산 (문자열 → 초)
-  // ================================================
   function timeStringToSeconds(timeStr) {
     const parts = timeStr.split(':');
     const mins = parseInt(parts[0]) || 0;
@@ -652,9 +605,6 @@
     return mins * 60 + secs;
   }
 
-  // ================================================
-  // 로컬 데이터 관리
-  // ================================================
   function saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime, classNum, studentNum) {
     const key = `localStats_${qrText}`;
     
@@ -664,7 +614,7 @@
       distance: distance,
       totalTime: totalTime,
       studentName: studentName,
-      firstScanTime: firstScanTime,  // 타임스탐프 (숫자)
+      firstScanTime: firstScanTime,
       lastScanTime: lastScanTime,
       sessionId: currentSessionId,
       lastProcessTime: Date.now(),
@@ -696,9 +646,6 @@
     document.getElementById('offlineCount').textContent = stats.length;
   }
 
-  // ================================================
-  // 30초 중복 체크
-  // ================================================
   function isDuplicateWithin30Seconds(qrText) {
     const localData = getLocalStats(qrText);
     if (!localData) {
@@ -724,8 +671,8 @@
     statsDiv.style.display = 'flex';
     statsDiv.classList.remove('running-start', 'running-end', 'duplicate');
 
-    if (scanCount === 1) {
-      // 첫 번째 스캔
+    // 정확히 첫 번째 스캔일 때만 "러닝 시작" 표시
+    if (scanCount === 1 && distance === 0.2) {
       icon.textContent = '🏃';
       title.textContent = '러닝 시작!';
       title.classList.add('running-start');
@@ -818,9 +765,6 @@
     }, 10000);
   }
 
-  // ================================================
-  // 초기화
-  // ================================================
   function init() {
     updateNetworkStatus();
     updateOfflineCount();
@@ -838,13 +782,30 @@
     }
   }
 
-  // ================================================
-  // 모드 선택
-  // ================================================
-  let selectedMode = null;
+  function initSessionCodeDisplay() {
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const date = String(today.getDate()).padStart(2, '0');
+    const dateCode = month + date;
+    const dateDisplay = `${month}월 ${parseInt(date)}일`;
+    
+    document.getElementById('sessionDateDisplay').textContent = dateDisplay;
+    document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
+    
+    document.getElementById('periodInput').addEventListener('input', (e) => {
+      const period = e.target.value;
+      if (period) {
+        document.getElementById('sessionCodeDisplay').textContent = dateCode + period;
+      } else {
+        document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
+      }
+      updateConfirmButtonState();
+    });
+  }
 
   function showModeModal() {
     document.getElementById('periodInput').value = '';
+    document.getElementById('maxDistanceInput').value = '';
     
     const today = new Date();
     const month = String(today.getMonth() + 1).padStart(2, '0');
@@ -868,9 +829,6 @@
     if (mode === 'maxDistance') {
       document.getElementById('maxDistanceBtn').classList.add('selected');
       document.getElementById('distanceInputGroup').style.display = 'block';
-      
-      // 거리 입력 필드 이벤트 리스너 추가
-      document.getElementById('maxDistanceInput').addEventListener('input', updateConfirmButtonState);
     } else {
       document.getElementById('freeBtn').classList.add('selected');
       document.getElementById('distanceInputGroup').style.display = 'none';
@@ -886,10 +844,11 @@
     
     if (selectedMode === 'maxDistance') {
       const distanceValue = parseFloat(document.getElementById('maxDistanceInput').value);
-      hasDistance = distanceValue && distanceValue > 0;
+      hasDistance = !isNaN(distanceValue) && distanceValue > 0;
     }
     
-    document.getElementById('confirmModeBtn').disabled = !(hasMode && period && hasDistance);
+    const canConfirm = hasMode && period && hasDistance;
+    document.getElementById('confirmModeBtn').disabled = !canConfirm;
   }
 
   function confirmMode() {
@@ -915,7 +874,6 @@
       localStorage.setItem('maxDistance', maxDistance);
     }
     
-    // 세션 코드 생성 (MMDD + 교시)
     const today = new Date();
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const date = String(today.getDate()).padStart(2, '0');
@@ -969,9 +927,6 @@
     }
   }
 
-  // ================================================
-  // 카메라
-  // ================================================
   async function startCamera() {
     if (cameraStarted || !sessionMode) return;
     
@@ -1027,9 +982,6 @@
     document.getElementById('cameraSelect').disabled = false;
   }
 
-  // ================================================
-  // 스캔 루프
-  // ================================================
   function startScanLoop() {
     if (scanLoopInterval) clearInterval(scanLoopInterval);
     
@@ -1069,27 +1021,21 @@
     }, 50);
   }
 
-  // ================================================
-  // QR 처리
-  // ================================================
   async function handleQRData(qrText) {
     scanning = false;
     
-    // 이미 종료된 학생
     if (endedStudents[qrText]) {
       alert('이미 종료된 학생입니다');
       resumeScanning();
       return;
     }
 
-    // 30초 중복 체크
     if (isDuplicateWithin30Seconds(qrText)) {
       displayDuplicate(qrText);
       resumeScanning();
       return;
     }
 
-    // 온라인 시도
     if (isOnline) {
       try {
         const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText) + '&sessionId=' + encodeURIComponent(currentSessionId);
@@ -1102,7 +1048,6 @@
           const totalTime = result.data.accumulated.timeFormatted || "00:00:00";
           const studentData = result.data.student;
           
-          // 로컬에도 저장 (타임스탐프 사용)
           const firstScanTime = result.data.accumulated.firstScanTime || Date.now();
           const lastScanTime = Date.now();
           const classNum = studentData.classNum;
@@ -1111,7 +1056,6 @@
           saveLocalStats(qrText, scanCount, distance, totalTime, studentData.name, firstScanTime, lastScanTime, classNum, studentNum);
           updateOfflineCount();
           
-          // 통계 표시
           const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
           displayStats(studentData, scanCount, distance, totalTime, isEnded);
           
@@ -1123,11 +1067,10 @@
           return;
         }
       } catch (error) {
-        // catch 블록에서 오프라인 로직으로 진행
+        // 오프라인 로직으로 진행
       }
     }
 
-    // 오프라인 처리
     const localData = getLocalStats(qrText);
     const parts = qrText.split('-');
     
@@ -1137,19 +1080,17 @@
       return;
     }
 
-    const classNum = parts[0];  // 문자열 유지: "01"
-    const studentNum = parts[1];  // 문자열 유지: "001"
+    const classNum = parts[0];
+    const studentNum = parts[1];
     const studentName = localData ? localData.studentName : `${classNum}반 ${studentNum}번`;
 
     let scanCount, distance, totalTime, firstScanTime;
 
     if (localData) {
-      // 기존 로컬 데이터 누적
       scanCount = localData.scanCount + 1;
       distance = localData.distance + 0.2;
-      firstScanTime = localData.firstScanTime;  // 타임스탐프
+      firstScanTime = localData.firstScanTime;
       
-      // 시간 계산
       const first = new Date(firstScanTime);
       const now = new Date();
       const diffSec = Math.round((now - first) / 1000);
@@ -1157,18 +1098,16 @@
       const secs = diffSec % 60;
       totalTime = mins + ':' + String(secs).padStart(2, '0');
     } else {
-      // 새로운 학생
       scanCount = 1;
       distance = 0.2;
-      firstScanTime = Date.now();  // 타임스탐프
+      firstScanTime = Date.now();
       totalTime = '00:00:00';
     }
 
-    const lastScanTime = Date.now();  // 타임스탐프
+    const lastScanTime = Date.now();
     saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime, classNum, studentNum);
     updateOfflineCount();
 
-    // 통계 표시
     const studentData = { name: studentName, classNum: classNum, studentNum: studentNum };
     const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
     displayStats(studentData, scanCount, distance, totalTime, isEnded);
@@ -1188,9 +1127,6 @@
     }, 300);
   }
 
-  // ================================================
-  // 데이터 업로드
-  // ================================================
   async function uploadData() {
     const allStats = getAllLocalStats();
     
@@ -1204,7 +1140,6 @@
     }
 
     let success = 0;
-    let fail = 0;
 
     for (let stat of allStats) {
       try {
@@ -1214,16 +1149,13 @@
         
         if (result.success) {
           success++;
-        } else {
-          fail++;
         }
       } catch (error) {
-        fail++;
+        // 무시
       }
     }
 
     if (success > 0) {
-      // 성공한 것들 삭제
       for (let i = 0; i < success && i < allStats.length; i++) {
         const key = `localStats_${allStats[i].qrText}`;
         localStorage.removeItem(key);
@@ -1247,9 +1179,6 @@
     }
   }
 
-  // ================================================
-  // 일괄 종료
-  // ================================================
   function batchEndSession() {
     const allStats = getAllLocalStats();
     
@@ -1261,7 +1190,6 @@
     if (confirm(`${allStats.length}명 학생을 종료하시겠습니까?\n(현재 시간으로 기록됩니다)`)) {
       const now = Date.now();
 
-      // 모든 학생의 lastScanTime을 현재 시간으로 업데이트
       for (let stat of allStats) {
         const first = new Date(stat.firstScanTime);
         const diffSec = Math.round((now - first) / 1000);
@@ -1292,9 +1220,6 @@
     }
   }
 
-  // ================================================
-  // 시작
-  // ================================================
   init();
   
   if ('wakeLock' in navigator) {
