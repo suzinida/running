@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <title>러닝 기록 프로그램</title>
+  <title>러닝 기록 시스템</title>
   <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -153,6 +153,8 @@
       gap: 8px;
       margin-bottom: 15px;
     }
+
+    /* 통계 카드 (메인) */
     .stats {
       background: linear-gradient(135deg, #f0f7ff 0%, #e3f2fd 100%);
       border: 3px solid #4285F4;
@@ -174,10 +176,6 @@
       background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
       border-color: #ffc107;
     }
-    .stats.duplicate {
-      background: linear-gradient(135deg, #f8d7da 0%, #f5c6cb 100%);
-      border-color: #f44336;
-    }
     .stats-icon {
       font-size: 32px;
       margin-bottom: 8px;
@@ -194,9 +192,6 @@
     .stats-title.running-end {
       color: #ff9800;
     }
-    .stats-title.duplicate {
-      color: #f44336;
-    }
     .stats-info {
       font-size: 14px;
       color: #333;
@@ -206,6 +201,11 @@
       color: #34A853;
       font-size: 16px;
     }
+    .stats-empty {
+      color: #999;
+      font-size: 13px;
+    }
+
     .section {
       background: #f9f9f9;
       border: 0.5px solid #e0e0e0;
@@ -302,57 +302,6 @@
       font-size: 20px;
       margin-bottom: 4px;
     }
-    .session-code-section {
-      background: #f0f7ff;
-      border: 2px solid #4285F4;
-      padding: 15px;
-      border-radius: 10px;
-      margin-bottom: 15px;
-      text-align: center;
-    }
-    .session-code-label {
-      font-size: 12px;
-      color: #4285F4;
-      font-weight: bold;
-      margin-bottom: 8px;
-    }
-    .session-code-input {
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 8px;
-    }
-    .session-date {
-      font-size: 16px;
-      font-weight: bold;
-      color: #4285F4;
-      min-width: 80px;
-    }
-    .session-period {
-      width: 50px;
-      padding: 10px;
-      font-size: 16px;
-      font-weight: bold;
-      border: 2px solid #4285F4;
-      border-radius: 5px;
-      text-align: center;
-      color: #4285F4;
-    }
-    .session-period:focus {
-      outline: none;
-      border-color: #2e5cc8;
-      background: #f0f7ff;
-    }
-    .session-code-display {
-      background: white;
-      border: 2px dashed #4285F4;
-      padding: 8px;
-      border-radius: 5px;
-      font-size: 14px;
-      color: #4285F4;
-      font-weight: bold;
-    }
     .mode-buttons {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -422,7 +371,7 @@
 <body>
 
 <div class="container">
-  <h1>🏃 러닝 기록 프로그램</h1>
+  <h1>🏃 러닝 기록</h1>
   
   <div class="session-header">
     <div class="session-info">
@@ -450,34 +399,31 @@
     <button id="stopBtn" onclick="stopCamera()" disabled>중지</button>
   </div>
 
+  <!-- 통계 카드 (메인) -->
   <div id="stats" class="stats" style="display:none;">
     <div class="stats-icon" id="statsIcon">📍</div>
     <div class="stats-title" id="statsTitle">기다중...</div>
     <div class="stats-info" id="statsInfo"></div>
   </div>
   
+  <div class="section">
+    <h3>오프라인 데이터 관리</h3>
+    <div class="offline-data-count">저장됨: <strong id="offlineCount">0</strong>개</div>
+    <button class="upload" onclick="uploadData()">📤 데이터 업로드</button>
+    <button class="delete" onclick="clearData()">🗑️ 로컬 데이터 전부 삭제</button>
+  </div>
 
+  <div class="section">
+    <button class="batch-end" id="batchEndBtn" onclick="batchEndSession()" style="display:none;">🛑 일괄 종료</button>
+  </div>
 </div>
 
+<!-- 모드 선택 모달 -->
 <div id="modeModal" class="modal">
   <div class="modal-content">
     <div class="modal-header">
-      <h2>수업 시작</h2>
-      <p style="font-size: 12px;">세션 코드와 운동 모드를 설정하세요</p>
-    </div>
-    
-    <div class="session-code-section">
-      <div class="session-code-label">세션 설정</div>
-      <div class="session-code-input">
-        <div class="session-date" id="sessionDateDisplay">09월 09일</div>
-        <div style="display: flex; align-items: center; gap: 8px;">
-          <input type="number" id="periodInput" class="session-period" placeholder="1" min="1" max="8" inputmode="numeric" onInput="updateConfirmButtonState()">
-          <div style="font-size: 14px; color: #4285F4; font-weight: bold; min-width: 40px;">교시</div>
-        </div>
-      </div>
-      <div class="session-code-display">
-        세션명: <span id="sessionCodeDisplay">0909?</span>
-      </div>
+      <h2>운동 모드</h2>
+      <p style="font-size: 12px;">모드를 선택하세요</p>
     </div>
     
     <div class="mode-buttons">
@@ -495,7 +441,7 @@
     
     <div id="distanceInputGroup" class="input-group" style="display:none;">
       <label for="maxDistanceInput">목표 거리 (km):</label>
-      <input type="number" id="maxDistanceInput" placeholder="예: 10" min="1" step="0.5" onInput="updateConfirmButtonState()">
+      <input type="number" id="maxDistanceInput" placeholder="예: 10" min="1" step="0.5">
     </div>
     
     <div class="modal-buttons">
@@ -516,14 +462,18 @@
   let qrCooldown = false;
   let scanLoopInterval = null;
   
+  // 세션 설정
   let currentSessionId = null;
   let sessionMode = null;
   let maxDistance = null;
   let endedStudents = {};
   
+  // 네트워크
   let isOnline = navigator.onLine;
-  let selectedMode = null;
 
+  // ================================================
+  // 네트워크 상태
+  // ================================================
   window.addEventListener('online', () => {
     isOnline = true;
     updateNetworkStatus();
@@ -545,6 +495,9 @@
     }
   }
 
+  // ================================================
+  // 통신 (재시도 로직)
+  // ================================================
   async function fetchWithRetry(url, retries = 3) {
     for (let i = 0; i < retries; i++) {
       try {
@@ -577,26 +530,46 @@
     }
   }
 
-  function calculatePace(totalSeconds, distance) {
-    if (distance === 0) return null;
+  // ================================================
+  // 로컬 데이터 관리
+  // ================================================
+  function saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime) {
+    const key = `localStats_${qrText}`;
     
-    const paceMinutes = (totalSeconds / distance) / 60;
-    const paceMin = Math.floor(paceMinutes);
-    const paceSec = Math.round((paceMinutes - paceMin) * 60);
-    
-    return `${paceMin}'${String(paceSec).padStart(2, '0')}"/km`;
+    localStorage.setItem(key, JSON.stringify({
+      qrText: qrText,
+      scanCount: scanCount,
+      distance: distance,
+      totalTime: totalTime,
+      studentName: studentName,
+      firstScanTime: firstScanTime,
+      lastScanTime: lastScanTime,
+      sessionId: currentSessionId
+    }));
   }
 
-  function timeStringToSeconds(timeStr) {
-    const parts = timeStr.split(':');
-    const mins = parseInt(parts[0]) || 0;
-    const secs = parseInt(parts[1]) || 0;
-    return mins * 60 + secs;
+  function getLocalStats(qrText) {
+    const key = `localStats_${qrText}`;
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : null;
   }
 
+  function getAllLocalStats() {
+    const stats = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith('localStats_')) {
+        const data = JSON.parse(localStorage.getItem(key));
+        stats.push(data);
+      }
+    }
+    return stats;
+  }
 
-
-
+  function updateOfflineCount() {
+    const stats = getAllLocalStats();
+    document.getElementById('offlineCount').textContent = stats.length;
+  }
 
   // ================================================
   // 통계 표시 (메인)
@@ -608,10 +581,10 @@
     const info = document.getElementById('statsInfo');
 
     statsDiv.style.display = 'flex';
-    statsDiv.classList.remove('running-start', 'running-end', 'duplicate');
+    statsDiv.classList.remove('running-start', 'running-end');
 
-    // 정확히 첫 번째 스캔일 때만 "러닝 시작" 표시
-    if (scanCount === 1 && distance === 0) {
+    if (scanCount === 1) {
+      // 첫 번째 스캔
       icon.textContent = '🏃';
       title.textContent = '러닝 시작!';
       title.classList.add('running-start');
@@ -623,44 +596,39 @@
       title.textContent = '러닝 종료!';
       title.classList.add('running-end');
       statsDiv.classList.add('running-end');
-      
-      const totalSeconds = timeStringToSeconds(totalTime);
-      const pace = calculatePace(totalSeconds, distance);
-      
       info.innerHTML = `
         <div style="font-size: 13px;">
           <div style="margin-bottom: 8px;"><strong>${studentData.name}</strong></div>
           <div>⏱️ ${totalTime}</div>
           <div>거리: ${distance.toFixed(1)}km</div>
-          ${pace ? `<div>페이스: ${pace}</div>` : ''}
         </div>
       `;
     } else {
-      // 두 번째 이상 - 자율 모드든 거리제한 모드든 항상 표시
+      // 두 번째 이상
       icon.textContent = '📍';
-      title.textContent = `${studentData.classNum}반 ${studentData.studentNum}번 학생`;
+      title.textContent = `${String(studentData.studentNum).padStart(3, '0')}번 학생`;
       title.classList.remove('running-start', 'running-end');
       statsDiv.classList.remove('running-start', 'running-end');
-      
-      const totalSeconds = timeStringToSeconds(totalTime);
-      const pace = calculatePace(totalSeconds, distance);
-      
       info.innerHTML = `
         <div>
           <div>⏱️ ${totalTime}</div>
           <div>거리: <strong>${distance.toFixed(1)}km</strong></div>
           <div>라운드: <strong>${scanCount - 1}</strong></div>
-          ${pace ? `<div>페이스: ${pace}</div>` : ''}
         </div>
       `;
     }
   }
 
+  function clearStatsDisplay() {
+    document.getElementById('stats').style.display = 'none';
+  }
 
-
+  // ================================================
+  // 초기화
+  // ================================================
   function init() {
     updateNetworkStatus();
-    initSessionCodeDisplay();
+    updateOfflineCount();
     
     currentSessionId = localStorage.getItem('currentSessionId');
     sessionMode = localStorage.getItem('sessionMode');
@@ -674,42 +642,13 @@
     }
   }
 
-  function initSessionCodeDisplay() {
-    const today = new Date();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const date = String(today.getDate()).padStart(2, '0');
-    const dateCode = month + date;
-    const dateDisplay = `${month}월 ${date}일`;
-    
-    document.getElementById('sessionDateDisplay').textContent = dateDisplay;
-    document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
-    
-    document.getElementById('periodInput').addEventListener('input', (e) => {
-      const period = e.target.value;
-      if (period) {
-        document.getElementById('sessionCodeDisplay').textContent = dateCode + period;
-      } else {
-        document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
-      }
-      updateConfirmButtonState();
-    });
-  }
+  // ================================================
+  // 모드 선택
+  // ================================================
+  let selectedMode = null;
 
   function showModeModal() {
-    document.getElementById('periodInput').value = '';
-    document.getElementById('maxDistanceInput').value = '';
-    
-    const today = new Date();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const date = String(today.getDate()).padStart(2, '0');
-    const dateCode = month + date;
-    
-    document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
     document.getElementById('modeModal').classList.add('show');
-    document.getElementById('maxDistanceBtn').classList.remove('selected');
-    document.getElementById('freeBtn').classList.remove('selected');
-    document.getElementById('confirmModeBtn').disabled = true;
-    selectedMode = null;
   }
 
   function selectMode(mode) {
@@ -725,32 +664,10 @@
       document.getElementById('freeBtn').classList.add('selected');
       document.getElementById('distanceInputGroup').style.display = 'none';
     }
-    
-    updateConfirmButtonState();
-  }
-
-  function updateConfirmButtonState() {
-    const period = document.getElementById('periodInput').value;
-    const hasMode = selectedMode !== null;
-    let hasDistance = true;
-    
-    if (selectedMode === 'maxDistance') {
-      const distanceValue = parseFloat(document.getElementById('maxDistanceInput').value);
-      hasDistance = !isNaN(distanceValue) && distanceValue > 0;
-    }
-    
-    const canConfirm = hasMode && period && hasDistance;
-    document.getElementById('confirmModeBtn').disabled = !canConfirm;
+    document.getElementById('confirmModeBtn').disabled = false;
   }
 
   function confirmMode() {
-    const period = document.getElementById('periodInput').value;
-    
-    if (!period || period < 1 || period > 8) {
-      alert('교시를 올바르게 입력하세요 (1~8)');
-      return;
-    }
-    
     if (!selectedMode) {
       alert('모드를 선택하세요');
       return;
@@ -766,18 +683,9 @@
       localStorage.setItem('maxDistance', maxDistance);
     }
     
-    const today = new Date();
-    const month = String(today.getMonth() + 1).padStart(2, '0');
-    const date = String(today.getDate()).padStart(2, '0');
-    const sessionCode = month + date + period;
-    
-    currentSessionId = sessionCode;
-    localStorage.setItem('currentSessionId', currentSessionId);
-    
+    generateNewSessionId();
     sessionMode = selectedMode;
     localStorage.setItem('sessionMode', sessionMode);
-    
-    endedStudents = {};
     
     document.getElementById('modeModal').classList.remove('show');
     displaySessionInfo();
@@ -790,8 +698,19 @@
     }
   }
 
+  function generateNewSessionId() {
+    currentSessionId = 'SESSION_' + Date.now();
+    localStorage.setItem('currentSessionId', currentSessionId);
+    endedStudents = {};
+  }
+
   function displaySessionInfo() {
-    document.getElementById('sessionDisplay').textContent = currentSessionId;
+    const dateObj = new Date(parseInt(currentSessionId.split('_')[1]));
+    const timeStr = dateObj.toLocaleTimeString('ko-KR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    document.getElementById('sessionDisplay').textContent = timeStr;
   }
 
   function updateModeBadge() {
@@ -799,9 +718,11 @@
     if (sessionMode === 'maxDistance') {
       badge.className = 'mode-badge max-distance';
       badge.textContent = `📏 ${maxDistance}km`;
+      document.getElementById('batchEndBtn').style.display = 'none';
     } else {
       badge.className = 'mode-badge';
       badge.textContent = '🆓 자율';
+      document.getElementById('batchEndBtn').style.display = 'block';
     }
   }
 
@@ -817,6 +738,9 @@
     }
   }
 
+  // ================================================
+  // 카메라
+  // ================================================
   async function startCamera() {
     if (cameraStarted || !sessionMode) return;
     
@@ -872,6 +796,9 @@
     document.getElementById('cameraSelect').disabled = false;
   }
 
+  // ================================================
+  // 스캔 루프
+  // ================================================
   function startScanLoop() {
     if (scanLoopInterval) clearInterval(scanLoopInterval);
     
@@ -879,19 +806,28 @@
       if (!scanning) return;
       
       try {
+        frameCount++;
+        
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           
+          if (canvas.width === 0 || canvas.height === 0) return;
+          
           canvasContext.drawImage(video, 0, 0);
           const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
           
-          const code = jsQR(imageData.data, canvas.width, canvas.height);
-          
-          if (code && !qrCooldown) {
-            if (lastQRData !== code.data) {
+          if (typeof jsQR === 'function') {
+            const code = jsQR(imageData.data, canvas.width, canvas.height);
+            
+            if (code && !qrCooldown) {
+              if (lastQRData === code.data) {
+                return;
+              }
+              
               lastQRData = code.data;
               qrCooldown = true;
+              
               handleQRData(code.data);
             }
           }
@@ -899,12 +835,16 @@
       } catch (e) {
         console.error('스캔 오류:', e);
       }
-    }, 30);
+    }, 50);
   }
 
+  // ================================================
+  // QR 처리
+  // ================================================
   async function handleQRData(qrText) {
     scanning = false;
     
+    // 이미 종료된 학생
     if (endedStudents[qrText]) {
       alert('이미 종료된 학생입니다');
       resumeScanning();
@@ -918,12 +858,47 @@
     const info = document.getElementById('statsInfo');
     
     statsDiv.style.display = 'flex';
-    statsDiv.classList.remove('running-start', 'running-end', 'duplicate');
     icon.textContent = '⏳';
     title.textContent = '처리 중...';
     info.innerHTML = '';
 
-    // QR 형식 확인
+    // 온라인 시도
+    if (isOnline) {
+      try {
+        const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText) + '&sessionId=' + encodeURIComponent(currentSessionId);
+        
+        const result = await fetchWithRetry(appScriptUrl, 3);
+        
+        if (result.success) {
+          const scanCount = result.data.accumulated.scanCount;
+          const distance = result.data.accumulated.distance || 0;
+          const totalTime = result.data.accumulated.timeFormatted || "00:00:00";
+          const studentData = result.data.student;
+          
+          // 로컬에도 저장
+          const firstScanTime = result.data.accumulated.firstScanTime || new Date().toLocaleString('ko-KR');
+          const lastScanTime = new Date().toLocaleString('ko-KR');
+          saveLocalStats(qrText, scanCount, distance, totalTime, studentData.name, firstScanTime, lastScanTime);
+          updateOfflineCount();
+          
+          // 통계 표시
+          const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
+          displayStats(studentData, scanCount, distance, totalTime, isEnded);
+          
+          if (isEnded) {
+            endedStudents[qrText] = true;
+          }
+          
+          resumeScanning();
+          return;
+        }
+      } catch (error) {
+        // 온라인 실패 → 오프라인 로직으로
+      }
+    }
+
+    // 오프라인 처리
+    const localData = getLocalStats(qrText);
     const parts = qrText.split('-');
     
     if (!parts || parts.length !== 2) {
@@ -932,44 +907,47 @@
       return;
     }
 
-    const classNum = parts[0];
-    const studentNum = parts[1];
+    const classNum = parseInt(parts[0]);
+    const studentNum = parseInt(parts[1]);
+    const studentName = localData ? localData.studentName : `${classNum}반 ${studentNum}번`;
 
-    // 온라인 필수 (핫스팟 필수)
-    if (!isOnline) {
-      alert('⚠️ 온라인 연결 필수입니다\n(핫스팟 켜세요)');
-      resumeScanning();
-      return;
+    let scanCount, distance, totalTime, firstScanTime;
+
+    if (localData) {
+      // 기존 로컬 데이터 누적
+      scanCount = localData.scanCount + 1;
+      distance = localData.distance + 0.2;
+      firstScanTime = localData.firstScanTime;
+      
+      // 시간 계산
+      const first = new Date(firstScanTime);
+      const now = new Date();
+      const diffSec = Math.round((now - first) / 1000);
+      const mins = Math.floor(diffSec / 60);
+      const secs = diffSec % 60;
+      totalTime = mins + ':' + String(secs).padStart(2, '0');
+    } else {
+      // 새로운 학생 (첫 스캔은 0)
+      scanCount = 1;
+      distance = 0;
+      firstScanTime = new Date().toLocaleString('ko-KR');
+      totalTime = '00:00:00';
     }
 
-    try {
-      const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText) + '&sessionId=' + encodeURIComponent(currentSessionId);
-      
-      const result = await fetchWithRetry(appScriptUrl, 3);
-      
-      if (result.success) {
-        const scanCount = result.data.accumulated.scanCount;
-        const distance = result.data.accumulated.distance || 0;
-        const totalTime = result.data.accumulated.timeFormatted || "00:00:00";
-        const studentData = result.data.student;
-        
-        const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
-        displayStats(studentData, scanCount, distance, totalTime, isEnded);
-        
-        if (isEnded) {
-          endedStudents[qrText] = true;
-        }
-        
-        resumeScanning();
-        return;
-      } else {
-        throw new Error(result.message);
-      }
-    } catch (error) {
-      alert('❌ 기록 저장 실패\n' + error.message);
-      resumeScanning();
-      return;
+    const lastScanTime = new Date().toLocaleString('ko-KR');
+    saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime);
+    updateOfflineCount();
+
+    // 통계 표시
+    const studentData = { name: studentName, studentNum: studentNum };
+    const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
+    displayStats(studentData, scanCount, distance, totalTime, isEnded);
+
+    if (isEnded) {
+      endedStudents[qrText] = true;
     }
+
+    resumeScanning();
   }
 
   function resumeScanning() {
@@ -980,8 +958,111 @@
     }, 300);
   }
 
+  // ================================================
+  // 데이터 업로드
+  // ================================================
+  async function uploadData() {
+    const allStats = getAllLocalStats();
+    
+    if (allStats.length === 0) {
+      alert('업로드할 데이터 없음');
+      return;
+    }
+    
+    if (!confirm(`${allStats.length}개 데이터를 업로드하시겠습니까?`)) {
+      return;
+    }
 
+    let success = 0;
+    let fail = 0;
 
+    for (let stat of allStats) {
+      try {
+        const url = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(stat.qrText) + '&sessionId=' + encodeURIComponent(stat.sessionId);
+        
+        const result = await fetchWithRetry(url, 2);
+        
+        if (result.success) {
+          success++;
+        } else {
+          fail++;
+        }
+      } catch (error) {
+        fail++;
+      }
+    }
+
+    if (success > 0) {
+      // 성공한 것들 삭제
+      for (let i = 0; i < success && i < allStats.length; i++) {
+        const key = `localStats_${allStats[i].qrText}`;
+        localStorage.removeItem(key);
+      }
+      updateOfflineCount();
+      alert(`✅ ${success}개 업로드 완료`);
+    } else {
+      alert('❌ 업로드 실패');
+    }
+  }
+
+  function clearData() {
+    if (confirm('정말로 로컬 데이터를 모두 삭제하시겠습니까?')) {
+      const allStats = getAllLocalStats();
+      for (let stat of allStats) {
+        const key = `localStats_${stat.qrText}`;
+        localStorage.removeItem(key);
+      }
+      updateOfflineCount();
+      alert('✅ 삭제됨');
+    }
+  }
+
+  // ================================================
+  // 일괄 종료
+  // ================================================
+  function batchEndSession() {
+    const allStats = getAllLocalStats();
+    
+    if (allStats.length === 0) {
+      alert('스캔된 학생이 없습니다');
+      return;
+    }
+
+    if (confirm(`${allStats.length}명 학생을 종료하시겠습니까?\n(현재 시간으로 기록됩니다)`)) {
+      const now = new Date();
+
+      // 모든 학생의 lastScanTime을 현재 시간으로 업데이트
+      for (let stat of allStats) {
+        const first = new Date(stat.firstScanTime);
+        const diffSec = Math.round((now - first) / 1000);
+        const mins = Math.floor(diffSec / 60);
+        const secs = diffSec % 60;
+        const totalTime = mins + ':' + String(secs).padStart(2, '0');
+
+        saveLocalStats(
+          stat.qrText,
+          stat.scanCount,
+          stat.distance,
+          totalTime,
+          stat.studentName,
+          stat.firstScanTime,
+          now.toLocaleString('ko-KR')
+        );
+      }
+
+      stopCamera();
+      alert('✅ 모든 학생 종료됨');
+      
+      setTimeout(() => {
+        localStorage.clear();
+        location.reload();
+      }, 2000);
+    }
+  }
+
+  // ================================================
+  // 시작
+  // ================================================
   init();
   
   if ('wakeLock' in navigator) {
