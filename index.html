@@ -672,7 +672,7 @@
     statsDiv.classList.remove('running-start', 'running-end', 'duplicate');
 
     // 정확히 첫 번째 스캔일 때만 "러닝 시작" 표시
-    if (scanCount === 1 && distance === 0.2) {
+    if (scanCount === 1 && distance === 0) {
       icon.textContent = '🏃';
       title.textContent = '러닝 시작!';
       title.classList.add('running-start');
@@ -1036,6 +1036,18 @@
       return;
     }
 
+    // 처리 중 표시
+    const statsDiv = document.getElementById('stats');
+    const icon = document.getElementById('statsIcon');
+    const title = document.getElementById('statsTitle');
+    const info = document.getElementById('statsInfo');
+    
+    statsDiv.style.display = 'flex';
+    statsDiv.classList.remove('running-start', 'running-end', 'duplicate');
+    icon.textContent = '⏳';
+    title.textContent = '처리 중...';
+    info.innerHTML = '';
+
     // 먼저 로컬 데이터 확인 (온/오프라인 모두 사용)
     const localData = getLocalStats(qrText);
     const parts = qrText.split('-');
@@ -1065,6 +1077,7 @@
           const firstScanTime = result.data.accumulated.firstScanTime || Date.now();
           const lastScanTime = Date.now();
           
+          // 온라인 성공 → Google Sheets 저장 + 로컬 백업
           saveLocalStats(qrText, scanCount, distance, totalTime, studentData.name, firstScanTime, lastScanTime, classNum, studentNum);
           updateOfflineCount();
           
@@ -1101,9 +1114,9 @@
       const secs = diffSec % 60;
       totalTime = mins + ':' + String(secs).padStart(2, '0');
     } else {
-      // 새로운 학생 (첫 스캔)
+      // 새로운 학생 (첫 스캔) - 거리는 0
       scanCount = 1;
-      distance = 0.2;
+      distance = 0;
       firstScanTime = Date.now();
       totalTime = '00:00:00';
     }
