@@ -646,7 +646,7 @@
     document.getElementById('offlineCount').textContent = stats.length;
   }
 
-  function isDuplicateWithin30Seconds(qrText) {
+  function isDuplicateWithin10Seconds(qrText) {
     const localData = getLocalStats(qrText);
     if (!localData) {
       return false;
@@ -656,7 +656,7 @@
     const lastTime = localData.lastProcessTime || 0;
     const diff = (now - lastTime) / 1000;
 
-    return diff < 30;
+    return diff < 10;
   }
 
   // ================================================
@@ -740,7 +740,7 @@
     icon.textContent = '⚠️';
     title.textContent = '이미 처리된 QR코드';
     title.classList.add('duplicate');
-    info.innerHTML = '<div style="font-size: 13px; color: #d32f2f;">30초 이내에 중복 스캔되었습니다</div>';
+    info.innerHTML = '<div style="font-size: 13px; color: #d32f2f;">10초 이내에 중복 스캔되었습니다</div>';
     
     // 10초 후 이전 상태로 복구
     setTimeout(() => {
@@ -787,7 +787,7 @@
     const month = String(today.getMonth() + 1).padStart(2, '0');
     const date = String(today.getDate()).padStart(2, '0');
     const dateCode = month + date;
-    const dateDisplay = `${month}월 ${parseInt(date)}일`;
+    const dateDisplay = `${month}월 ${date}일`;
     
     document.getElementById('sessionDateDisplay').textContent = dateDisplay;
     document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
@@ -1030,12 +1030,26 @@
       return;
     }
 
-    if (isDuplicateWithin30Seconds(qrText)) {
+    if (isDuplicateWithin10Seconds(qrText)) {
       displayDuplicate(qrText);
       resumeScanning();
       return;
     }
 
+    // 먼저 로컬 데이터 확인 (온/오프라인 모두 사용)
+    const localData = getLocalStats(qrText);
+    const parts = qrText.split('-');
+    
+    if (!parts || parts.length !== 2) {
+      alert('QR 형식 오류');
+      resumeScanning();
+      return;
+    }
+
+    const classNum = parts[0];
+    const studentNum = parts[1];
+
+    // 온라인 시도
     if (isOnline) {
       try {
         const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText) + '&sessionId=' + encodeURIComponent(currentSessionId);
@@ -1050,8 +1064,6 @@
           
           const firstScanTime = result.data.accumulated.firstScanTime || Date.now();
           const lastScanTime = Date.now();
-          const classNum = studentData.classNum;
-          const studentNum = studentData.studentNum;
           
           saveLocalStats(qrText, scanCount, distance, totalTime, studentData.name, firstScanTime, lastScanTime, classNum, studentNum);
           updateOfflineCount();
@@ -1067,26 +1079,17 @@
           return;
         }
       } catch (error) {
-        // 오프라인 로직으로 진행
+        console.log('온라인 통신 실패, 로컬 데이터 사용');
       }
     }
 
-    const localData = getLocalStats(qrText);
-    const parts = qrText.split('-');
-    
-    if (!parts || parts.length !== 2) {
-      alert('QR 형식 오류');
-      resumeScanning();
-      return;
-    }
-
-    const classNum = parts[0];
-    const studentNum = parts[1];
+    // 오프라인 또는 온라인 실패 → 로컬 데이터 사용
     const studentName = localData ? localData.studentName : `${classNum}반 ${studentNum}번`;
 
     let scanCount, distance, totalTime, firstScanTime;
 
     if (localData) {
+      // 기존 데이터 누적
       scanCount = localData.scanCount + 1;
       distance = localData.distance + 0.2;
       firstScanTime = localData.firstScanTime;
@@ -1098,6 +1101,7 @@
       const secs = diffSec % 60;
       totalTime = mins + ':' + String(secs).padStart(2, '0');
     } else {
+      // 새로운 학생 (첫 스캔)
       scanCount = 1;
       distance = 0.2;
       firstScanTime = Date.now();
@@ -1105,9 +1109,12 @@
     }
 
     const lastScanTime = Date.now();
+    
+    // 로컬스토리지에 저장 (매번 업데이트)
     saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime, classNum, studentNum);
     updateOfflineCount();
 
+    // 화면 표시
     const studentData = { name: studentName, classNum: classNum, studentNum: studentNum };
     const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
     displayStats(studentData, scanCount, distance, totalTime, isEnded);
