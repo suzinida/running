@@ -305,6 +305,57 @@
       font-size: 20px;
       margin-bottom: 4px;
     }
+    .session-code-section {
+      background: #f0f7ff;
+      border: 2px solid #4285F4;
+      padding: 15px;
+      border-radius: 10px;
+      margin-bottom: 15px;
+      text-align: center;
+    }
+    .session-code-label {
+      font-size: 12px;
+      color: #4285F4;
+      font-weight: bold;
+      margin-bottom: 8px;
+    }
+    .session-code-input {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 8px;
+    }
+    .session-date {
+      font-size: 16px;
+      font-weight: bold;
+      color: #4285F4;
+      min-width: 50px;
+    }
+    .session-period {
+      width: 50px;
+      padding: 10px;
+      font-size: 16px;
+      font-weight: bold;
+      border: 2px solid #4285F4;
+      border-radius: 5px;
+      text-align: center;
+      color: #4285F4;
+    }
+    .session-period:focus {
+      outline: none;
+      border-color: #2e5cc8;
+      background: #f0f7ff;
+    }
+    .session-code-display {
+      background: white;
+      border: 2px dashed #4285F4;
+      padding: 8px;
+      border-radius: 5px;
+      font-size: 14px;
+      color: #4285F4;
+      font-weight: bold;
+    }
     .mode-buttons {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -425,10 +476,26 @@
 <div id="modeModal" class="modal">
   <div class="modal-content">
     <div class="modal-header">
-      <h2>운동 모드</h2>
-      <p style="font-size: 12px;">모드를 선택하세요</p>
+      <h2>수업 시작</h2>
+      <p style="font-size: 12px;">세션 코드와 운동 모드를 설정하세요</p>
     </div>
     
+    <!-- 세션 코드 섹션 -->
+    <div class="session-code-section">
+      <div class="session-code-label">세션 설정</div>
+      <div class="session-code-input">
+        <div class="session-date" id="sessionDateDisplay">09월 09일</div>
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <input type="number" id="periodInput" class="session-period" placeholder="1" min="1" max="8" inputmode="numeric">
+          <div style="font-size: 14px; color: #4285F4; font-weight: bold; min-width: 40px;">교시</div>
+        </div>
+      </div>
+      <div class="session-code-display">
+        세션명: <span id="sessionCodeDisplay">0909?</span>
+      </div>
+    </div>
+    
+    <!-- 운동 모드 선택 -->
     <div class="mode-buttons">
       <div class="mode-btn" id="maxDistanceBtn" onclick="selectMode('maxDistance')">
         <div class="emoji">📏</div>
@@ -473,6 +540,30 @@
   
   // 네트워크
   let isOnline = navigator.onLine;
+
+  // ================================================
+  // 초기화: 날짜 표시 및 입력 이벤트
+  // ================================================
+  function initSessionCodeDisplay() {
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const date = String(today.getDate()).padStart(2, '0');
+    const dateCode = month + date;  // 0909
+    const dateDisplay = `${month}월 ${parseInt(date)}일`;  // 09월 9일 형식
+    
+    document.getElementById('sessionDateDisplay').textContent = dateDisplay;
+    document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
+    
+    // 교시 입력 이벤트
+    document.getElementById('periodInput').addEventListener('input', (e) => {
+      const period = e.target.value;
+      if (period) {
+        document.getElementById('sessionCodeDisplay').textContent = dateCode + period;
+      } else {
+        document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
+      }
+    });
+  }
 
   // ================================================
   // 네트워크 상태
@@ -696,6 +787,7 @@
   function init() {
     updateNetworkStatus();
     updateOfflineCount();
+    initSessionCodeDisplay();
     
     currentSessionId = localStorage.getItem('currentSessionId');
     sessionMode = localStorage.getItem('sessionMode');
@@ -715,7 +807,19 @@
   let selectedMode = null;
 
   function showModeModal() {
+    document.getElementById('periodInput').value = '';
+    
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const date = String(today.getDate()).padStart(2, '0');
+    const dateCode = month + date;
+    
+    document.getElementById('sessionCodeDisplay').textContent = dateCode + '?';
     document.getElementById('modeModal').classList.add('show');
+    document.getElementById('maxDistanceBtn').classList.remove('selected');
+    document.getElementById('freeBtn').classList.remove('selected');
+    document.getElementById('confirmModeBtn').disabled = true;
+    selectedMode = null;
   }
 
   function selectMode(mode) {
@@ -731,10 +835,26 @@
       document.getElementById('freeBtn').classList.add('selected');
       document.getElementById('distanceInputGroup').style.display = 'none';
     }
-    document.getElementById('confirmModeBtn').disabled = false;
+    
+    updateConfirmButtonState();
+  }
+
+  function updateConfirmButtonState() {
+    const period = document.getElementById('periodInput').value;
+    const hasMode = selectedMode !== null;
+    const hasDistance = selectedMode !== 'maxDistance' || document.getElementById('maxDistanceInput').value;
+    
+    document.getElementById('confirmModeBtn').disabled = !(hasMode && period && hasDistance);
   }
 
   function confirmMode() {
+    const period = document.getElementById('periodInput').value;
+    
+    if (!period || period < 1 || period > 8) {
+      alert('교시를 올바르게 입력하세요 (1~8)');
+      return;
+    }
+    
     if (!selectedMode) {
       alert('모드를 선택하세요');
       return;
@@ -750,9 +870,19 @@
       localStorage.setItem('maxDistance', maxDistance);
     }
     
-    generateNewSessionId();
+    // 세션 코드 생성 (MMDD + 교시)
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const date = String(today.getDate()).padStart(2, '0');
+    const sessionCode = month + date + period;
+    
+    currentSessionId = sessionCode;
+    localStorage.setItem('currentSessionId', currentSessionId);
+    
     sessionMode = selectedMode;
     localStorage.setItem('sessionMode', sessionMode);
+    
+    endedStudents = {};
     
     document.getElementById('modeModal').classList.remove('show');
     displaySessionInfo();
@@ -765,19 +895,8 @@
     }
   }
 
-  function generateNewSessionId() {
-    currentSessionId = 'SESSION_' + Date.now();
-    localStorage.setItem('currentSessionId', currentSessionId);
-    endedStudents = {};
-  }
-
   function displaySessionInfo() {
-    const dateObj = new Date(parseInt(currentSessionId.split('_')[1]));
-    const timeStr = dateObj.toLocaleTimeString('ko-KR', {
-      hour: '2-digit',
-      minute: '2-digit'
-    });
-    document.getElementById('sessionDisplay').textContent = timeStr;
+    document.getElementById('sessionDisplay').textContent = currentSessionId;
   }
 
   function updateModeBadge() {
