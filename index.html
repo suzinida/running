@@ -43,17 +43,36 @@
       object-fit: cover;
     }
     #canvas { display: none; }
+    .camera-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+      align-items: center;
+    }
+    select {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      font-size: 14px;
+      background: white;
+      color: #333;
+    }
+    select:focus {
+      outline: none;
+      border-color: #4285F4;
+      box-shadow: 0 0 5px rgba(66, 133, 244, 0.3);
+    }
     button { 
       background: #4285F4; 
       color: white;
       border: none; 
-      padding: 12px 24px; 
-      font-size: 16px; 
+      padding: 10px 20px; 
+      font-size: 14px; 
       border-radius: 5px; 
       cursor: pointer; 
-      margin: 5px; 
-      width: calc(50% - 7.5px);
       transition: background 0.3s;
+      flex: 1;
     }
     button:hover { 
       background: #357ae8; 
@@ -126,14 +145,71 @@
       margin-bottom: 10px;
     }
     .data-count {
-      font-size: 18px;
+      font-size: 16px;
       font-weight: bold;
       color: #4285F4;
       margin: 10px 0;
+      padding: 10px;
+      background: #f0f7ff;
+      border-radius: 5px;
+    }
+    .scan-list {
+      max-height: 300px;
+      overflow-y: auto;
+      margin: 10px 0;
+      border: 1px solid #e0e0e0;
+      border-radius: 5px;
+      background: #fafafa;
+    }
+    .scan-item {
+      padding: 12px;
+      border-bottom: 1px solid #e0e0e0;
+      font-size: 13px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    .scan-item:last-child {
+      border-bottom: none;
+    }
+    .scan-info {
+      flex: 1;
+    }
+    .scan-info p {
+      margin: 3px 0;
+      color: #333;
+    }
+    .scan-qr {
+      color: #4285F4;
+      font-weight: bold;
+      font-size: 12px;
+    }
+    .scan-name {
+      color: #666;
+      font-size: 12px;
+    }
+    .scan-time {
+      color: #999;
+      font-size: 11px;
+    }
+    .scan-delete {
+      background: #ff1744;
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+      flex-shrink: 0;
+    }
+    .scan-delete:hover {
+      background: #da190b;
     }
     button.upload {
       background: #34A853;
       width: 100%;
+      margin-top: 10px;
     }
     button.upload:hover {
       background: #2d8e47;
@@ -141,6 +217,7 @@
     button.delete {
       background: #f44336;
       width: 100%;
+      margin-top: 5px;
     }
     button.delete:hover {
       background: #da190b;
@@ -155,6 +232,13 @@
   <div class="camera-section">
     <video id="video" playsinline></video>
     <canvas id="canvas"></canvas>
+  </div>
+  
+  <div class="camera-controls">
+    <select id="cameraSelect">
+      <option value="environment">후면 카메라</option>
+      <option value="user">전면 카메라</option>
+    </select>
   </div>
   
   <div class="button-group">
@@ -172,10 +256,14 @@
   
   <div class="section">
     <h3>오프라인 데이터 관리</h3>
-    <p>로컬 저장 데이터</p>
-    <div class="data-count">총 <span id="localCount">0</span>개</div>
+    <div class="data-count">저장됨: <span id="localCount">0</span>개</div>
+    
+    <div class="scan-list" id="scanList" style="display:none;">
+      <!-- 스캔 항목들이 여기 표시됨 -->
+    </div>
+    
     <button class="upload" onclick="uploadData()">데이터 업로드</button>
-    <button class="delete" onclick="clearData()" style="margin-top: 5px;">로컬 데이터 삭제</button>
+    <button class="delete" onclick="clearData()">로컬 데이터 전부 삭제</button>
   </div>
 </div>
 
@@ -213,8 +301,11 @@
     try {
       console.log('카메라 요청 중...');
       
+      const facingMode = document.getElementById('cameraSelect').value;
+      console.log('선택된 카메라:', facingMode === 'environment' ? '후면' : '전면');
+      
       const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: 'environment' }
+        video: { facingMode: facingMode }
       }).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
       
       console.log('카메라 스트림 획득 성공');
@@ -226,6 +317,7 @@
       
       document.getElementById('startBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
+      document.getElementById('cameraSelect').disabled = true;
       scanning = true;
       
       setTimeout(scan, 100);
@@ -250,6 +342,7 @@
     cameraStarted = false;
     document.getElementById('startBtn').disabled = false;
     document.getElementById('stopBtn').disabled = true;
+    document.getElementById('cameraSelect').disabled = false;
   }
 
   function scan() {
@@ -372,10 +465,71 @@
       
       request.onsuccess = function() {
         document.getElementById('localCount').textContent = request.result;
+        displayScanList();
       };
     } catch (e) {
       console.error('카운트 오류:', e);
     }
+  }
+
+  function displayScanList() {
+    if (!db) return;
+    
+    try {
+      const transaction = db.transaction(['scans'], 'readonly');
+      const store = transaction.objectStore('scans');
+      const request = store.getAll();
+      
+      request.onsuccess = function() {
+        const scans = request.result;
+        const scanList = document.getElementById('scanList');
+        
+        if (scans.length === 0) {
+          scanList.style.display = 'none';
+          return;
+        }
+        
+        scanList.style.display = 'block';
+        scanList.innerHTML = '';
+        
+        scans.forEach(function(scan, index) {
+          const item = document.createElement('div');
+          item.className = 'scan-item';
+          
+          const time = new Date(scan.timestamp).toLocaleTimeString('ko-KR', { 
+            hour: '2-digit', 
+            minute: '2-digit',
+            second: '2-digit'
+          });
+          
+          item.innerHTML = `
+            <div class="scan-info">
+              <p class="scan-qr">QR: ${scan.qr}</p>
+              <p class="scan-name">${scan.student.name}</p>
+              <p class="scan-time">${time}</p>
+            </div>
+            <button class="scan-delete" onclick="deleteScan(${scan.id})">삭제</button>
+          `;
+          
+          scanList.appendChild(item);
+        });
+      };
+    } catch (e) {
+      console.error('스캔 리스트 조회 오류:', e);
+    }
+  }
+
+  function deleteScan(id) {
+    if (!confirm('이 스캔을 삭제하시겠습니까?')) return;
+    
+    const transaction = db.transaction(['scans'], 'readwrite');
+    const store = transaction.objectStore('scans');
+    store.delete(id);
+    
+    transaction.oncomplete = function() {
+      updateLocalCount();
+      showMessage('스캔이 삭제되었습니다', 'success');
+    };
   }
 
   async function uploadData() {
@@ -432,7 +586,7 @@
   }
 
   function clearData() {
-    if (confirm('정말로 로컬 데이터를 모두 삭제하시겠습니까?')) {
+    if (confirm('정말로 로컬 데이터를 모두 삭제하시겠습니까? 되돌릴 수 없습니다!')) {
       const transaction = db.transaction(['scans'], 'readwrite');
       const store = transaction.objectStore('scans');
       store.clear();
@@ -441,7 +595,7 @@
         updateLocalCount();
         document.getElementById('scanCount').textContent = '0';
         document.getElementById('stats').style.display = 'none';
-        showMessage('데이터가 삭제되었습니다', 'success');
+        showMessage('모든 데이터가 삭제되었습니다', 'success');
       };
     }
   }
