@@ -208,10 +208,6 @@
       color: #34A853;
       font-size: 16px;
     }
-    .stats-empty {
-      color: #999;
-      font-size: 13px;
-    }
 
     .section {
       background: #f9f9f9;
@@ -538,6 +534,30 @@
   }
 
   // ================================================
+  // 페이스 계산 (분/km)
+  // ================================================
+  function calculatePace(totalSeconds, distance) {
+    if (distance === 0) return null;
+    
+    // 분/km = 총시간(초) / 거리(km) / 60
+    const paceMinutes = (totalSeconds / distance) / 60;
+    const paceMin = Math.floor(paceMinutes);
+    const paceSec = Math.round((paceMinutes - paceMin) * 60);
+    
+    return `${paceMin}'${String(paceSec).padStart(2, '0')}"/km`;
+  }
+
+  // ================================================
+  // 총시간 계산 (문자열 → 초)
+  // ================================================
+  function timeStringToSeconds(timeStr) {
+    const parts = timeStr.split(':');
+    const mins = parseInt(parts[0]) || 0;
+    const secs = parseInt(parts[1]) || 0;
+    return mins * 60 + secs;
+  }
+
+  // ================================================
   // 로컬 데이터 관리
   // ================================================
   function saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime) {
@@ -552,7 +572,7 @@
       firstScanTime: firstScanTime,
       lastScanTime: lastScanTime,
       sessionId: currentSessionId,
-      lastProcessTime: Date.now()  // 30초 중복 체크용
+      lastProcessTime: Date.now()
     }));
   }
 
@@ -585,14 +605,14 @@
   function isDuplicateWithin30Seconds(qrText) {
     const localData = getLocalStats(qrText);
     if (!localData) {
-      return false;  // 처음 스캔
+      return false;
     }
 
     const now = Date.now();
     const lastTime = localData.lastProcessTime || 0;
-    const diff = (now - lastTime) / 1000;  // 초 단위
+    const diff = (now - lastTime) / 1000;
 
-    return diff < 30;  // 30초 이내면 중복
+    return diff < 30;
   }
 
   // ================================================
@@ -620,11 +640,17 @@
       title.textContent = '러닝 종료!';
       title.classList.add('running-end');
       statsDiv.classList.add('running-end');
+      
+      // 페이스 계산
+      const totalSeconds = timeStringToSeconds(totalTime);
+      const pace = calculatePace(totalSeconds, distance);
+      
       info.innerHTML = `
         <div style="font-size: 13px;">
           <div style="margin-bottom: 8px;"><strong>${studentData.name}</strong></div>
           <div>⏱️ ${totalTime}</div>
           <div>거리: ${distance.toFixed(1)}km</div>
+          ${pace ? `<div>페이스: ${pace}</div>` : ''}
         </div>
       `;
     } else {
@@ -633,11 +659,17 @@
       title.textContent = `${String(studentData.studentNum).padStart(3, '0')}번 학생`;
       title.classList.remove('running-start', 'running-end');
       statsDiv.classList.remove('running-start', 'running-end');
+      
+      // 페이스 계산
+      const totalSeconds = timeStringToSeconds(totalTime);
+      const pace = calculatePace(totalSeconds, distance);
+      
       info.innerHTML = `
         <div>
           <div>⏱️ ${totalTime}</div>
           <div>거리: <strong>${distance.toFixed(1)}km</strong></div>
           <div>라운드: <strong>${scanCount}</strong></div>
+          ${pace ? `<div>페이스: ${pace}</div>` : ''}
         </div>
       `;
     }
@@ -657,10 +689,6 @@
     title.textContent = '이미 처리된 QR코드';
     title.classList.add('duplicate');
     info.innerHTML = '<div style="font-size: 13px; color: #d32f2f;">30초 이내에 중복 스캔되었습니다</div>';
-  }
-
-  function clearStatsDisplay() {
-    document.getElementById('stats').style.display = 'none';
   }
 
   // ================================================
@@ -879,7 +907,7 @@
   }
 
   // ================================================
-  // QR 처리 (수정됨!)
+  // QR 처리
   // ================================================
   async function handleQRData(qrText) {
     scanning = false;
@@ -891,7 +919,7 @@
       return;
     }
 
-    // ★★★ 30초 중복 체크 (추가!)
+    // 30초 중복 체크
     if (isDuplicateWithin30Seconds(qrText)) {
       displayDuplicate(qrText);
       resumeScanning();
@@ -929,11 +957,11 @@
           return;
         }
       } catch (error) {
-        // ★★★ catch 블록 비워있지 않음! 오프라인 로직으로 진행
+        // catch 블록에서 오프라인 로직으로 진행
       }
     }
 
-    // ★★★ 오프라인 처리 (이제 항상 실행됨!)
+    // 오프라인 처리
     const localData = getLocalStats(qrText);
     const parts = qrText.split('-');
     
@@ -974,7 +1002,7 @@
     saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime);
     updateOfflineCount();
 
-    // ★★★ 통계 표시 (오프라인도 표시!)
+    // 통계 표시
     const studentData = { name: studentName, studentNum: studentNum };
     const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
     displayStats(studentData, scanCount, distance, totalTime, isEnded);
