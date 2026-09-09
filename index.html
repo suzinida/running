@@ -456,16 +456,7 @@
     <div class="stats-info" id="statsInfo"></div>
   </div>
   
-  <div class="section">
-    <h3>오프라인 데이터 관리</h3>
-    <div class="offline-data-count">저장됨: <strong id="offlineCount">0</strong>개</div>
-    <button class="upload" onclick="uploadData()">📤 데이터 업로드</button>
-    <button class="delete" onclick="clearData()">🗑️ 로컬 데이터 전부 삭제</button>
-  </div>
 
-  <div class="section">
-    <button class="batch-end" id="batchEndBtn" onclick="batchEndSession()" style="display:none;">🛑 일괄 종료</button>
-  </div>
 </div>
 
 <div id="modeModal" class="modal">
@@ -524,8 +515,6 @@
   let lastQRData = null;
   let qrCooldown = false;
   let scanLoopInterval = null;
-  
-  let previousStatsState = null;
   
   let currentSessionId = null;
   let sessionMode = null;
@@ -605,59 +594,9 @@
     return mins * 60 + secs;
   }
 
-  function saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime, classNum, studentNum) {
-    const key = `localStats_${qrText}`;
-    
-    localStorage.setItem(key, JSON.stringify({
-      qrText: qrText,
-      scanCount: scanCount,
-      distance: distance,
-      totalTime: totalTime,
-      studentName: studentName,
-      firstScanTime: firstScanTime,
-      lastScanTime: lastScanTime,
-      sessionId: currentSessionId,
-      lastProcessTime: Date.now(),
-      classNum: classNum,
-      studentNum: studentNum
-    }));
-  }
 
-  function getLocalStats(qrText) {
-    const key = `localStats_${qrText}`;
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : null;
-  }
 
-  function getAllLocalStats() {
-    const stats = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key.startsWith('localStats_')) {
-        const data = JSON.parse(localStorage.getItem(key));
-        stats.push(data);
-      }
-    }
-    return stats;
-  }
 
-  function updateOfflineCount() {
-    const stats = getAllLocalStats();
-    document.getElementById('offlineCount').textContent = stats.length;
-  }
-
-  function isDuplicateWithin10Seconds(qrText) {
-    const localData = getLocalStats(qrText);
-    if (!localData) {
-      return false;
-    }
-
-    const now = Date.now();
-    const lastTime = localData.lastProcessTime || 0;
-    const diff = (now - lastTime) / 1000;
-
-    return diff < 10;
-  }
 
   // ================================================
   // 통계 표시 (메인)
@@ -715,59 +654,12 @@
         </div>
       `;
     }
-    
-    // 이전 상태 저장
-    previousStatsState = {
-      display: statsDiv.style.display,
-      classes: Array.from(statsDiv.classList),
-      icon: icon.textContent,
-      title: title.textContent,
-      titleClasses: Array.from(title.classList),
-      info: info.innerHTML
-    };
   }
 
-  function displayDuplicate(qrText) {
-    const statsDiv = document.getElementById('stats');
-    const icon = document.getElementById('statsIcon');
-    const title = document.getElementById('statsTitle');
-    const info = document.getElementById('statsInfo');
 
-    statsDiv.style.display = 'flex';
-    statsDiv.classList.remove('running-start', 'running-end');
-    statsDiv.classList.add('duplicate');
-
-    icon.textContent = '⚠️';
-    title.textContent = '이미 처리된 QR코드';
-    title.classList.add('duplicate');
-    info.innerHTML = '<div style="font-size: 13px; color: #d32f2f;">10초 이내에 중복 스캔되었습니다</div>';
-    
-    // 10초 후 이전 상태로 복구
-    setTimeout(() => {
-      if (previousStatsState) {
-        statsDiv.style.display = previousStatsState.display;
-        statsDiv.className = 'stats';
-        previousStatsState.classes.forEach(cls => {
-          if (cls !== 'stats') statsDiv.classList.add(cls);
-        });
-        
-        icon.textContent = previousStatsState.icon;
-        title.textContent = previousStatsState.title;
-        title.className = 'stats-title';
-        previousStatsState.titleClasses.forEach(cls => {
-          if (cls !== 'stats-title') title.classList.add(cls);
-        });
-        
-        info.innerHTML = previousStatsState.info;
-      } else {
-        statsDiv.style.display = 'none';
-      }
-    }, 10000);
-  }
 
   function init() {
     updateNetworkStatus();
-    updateOfflineCount();
     initSessionCodeDisplay();
     
     currentSessionId = localStorage.getItem('currentSessionId');
@@ -907,11 +799,9 @@
     if (sessionMode === 'maxDistance') {
       badge.className = 'mode-badge max-distance';
       badge.textContent = `📏 ${maxDistance}km`;
-      document.getElementById('batchEndBtn').style.display = 'none';
     } else {
       badge.className = 'mode-badge';
       badge.textContent = '🆓 자율';
-      document.getElementById('batchEndBtn').style.display = 'block';
     }
   }
 
@@ -1030,12 +920,6 @@
       return;
     }
 
-    if (isDuplicateWithin10Seconds(qrText)) {
-      displayDuplicate(qrText);
-      resumeScanning();
-      return;
-    }
-
     // 처리 중 표시
     const statsDiv = document.getElementById('stats');
     const icon = document.getElementById('statsIcon');
@@ -1061,82 +945,41 @@
     const classNum = parts[0];
     const studentNum = parts[1];
 
-    // 온라인 시도
-    if (isOnline) {
-      try {
-        const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText) + '&sessionId=' + encodeURIComponent(currentSessionId);
-        
-        const result = await fetchWithRetry(appScriptUrl, 3);
-        
-        if (result.success) {
-          const scanCount = result.data.accumulated.scanCount;
-          const distance = result.data.accumulated.distance || 0;
-          const totalTime = result.data.accumulated.timeFormatted || "00:00:00";
-          const studentData = result.data.student;
-          
-          const firstScanTime = result.data.accumulated.firstScanTime || Date.now();
-          const lastScanTime = Date.now();
-          
-          // 온라인 성공 → Google Sheets 저장 + 로컬 백업
-          saveLocalStats(qrText, scanCount, distance, totalTime, studentData.name, firstScanTime, lastScanTime, classNum, studentNum);
-          updateOfflineCount();
-          
-          const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
-          displayStats(studentData, scanCount, distance, totalTime, isEnded);
-          
-          if (isEnded) {
-            endedStudents[qrText] = true;
-          }
-          
-          resumeScanning();
-          return;
-        }
-      } catch (error) {
-        console.log('온라인 통신 실패, 로컬 데이터 사용');
-      }
+    // 온라인 필수 (핫스팟 필수)
+    if (!isOnline) {
+      alert('⚠️ 온라인 연결 필수입니다\n(핫스팟 켜세요)');
+      resumeScanning();
+      return;
     }
 
-    // 오프라인 또는 온라인 실패 → 로컬 데이터 사용
-    const studentName = localData ? localData.studentName : `${classNum}반 ${studentNum}번`;
-
-    let scanCount, distance, totalTime, firstScanTime;
-
-    if (localData) {
-      // 기존 데이터 누적
-      scanCount = localData.scanCount + 1;
-      distance = localData.distance + 0.2;
-      firstScanTime = localData.firstScanTime;
+    try {
+      const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText) + '&sessionId=' + encodeURIComponent(currentSessionId);
       
-      const first = new Date(firstScanTime);
-      const now = new Date();
-      const diffSec = Math.round((now - first) / 1000);
-      const mins = Math.floor(diffSec / 60);
-      const secs = diffSec % 60;
-      totalTime = mins + ':' + String(secs).padStart(2, '0');
-    } else {
-      // 새로운 학생 (첫 스캔) - 거리는 0
-      scanCount = 1;
-      distance = 0;
-      firstScanTime = Date.now();
-      totalTime = '00:00:00';
+      const result = await fetchWithRetry(appScriptUrl, 3);
+      
+      if (result.success) {
+        const scanCount = result.data.accumulated.scanCount;
+        const distance = result.data.accumulated.distance || 0;
+        const totalTime = result.data.accumulated.timeFormatted || "00:00:00";
+        const studentData = result.data.student;
+        
+        const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
+        displayStats(studentData, scanCount, distance, totalTime, isEnded);
+        
+        if (isEnded) {
+          endedStudents[qrText] = true;
+        }
+        
+        resumeScanning();
+        return;
+      } else {
+        throw new Error(result.message);
+      }
+    } catch (error) {
+      alert('❌ 기록 저장 실패\n' + error.message);
+      resumeScanning();
+      return;
     }
-
-    const lastScanTime = Date.now();
-    
-    // 로컬스토리지에 저장 (매번 업데이트)
-    saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime, classNum, studentNum);
-    updateOfflineCount();
-
-    // 화면 표시
-    const studentData = { name: studentName, classNum: classNum, studentNum: studentNum };
-    const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
-    displayStats(studentData, scanCount, distance, totalTime, isEnded);
-
-    if (isEnded) {
-      endedStudents[qrText] = true;
-    }
-
-    resumeScanning();
   }
 
   function resumeScanning() {
@@ -1147,98 +990,7 @@
     }, 300);
   }
 
-  async function uploadData() {
-    const allStats = getAllLocalStats();
-    
-    if (allStats.length === 0) {
-      alert('업로드할 데이터 없음');
-      return;
-    }
-    
-    if (!confirm(`${allStats.length}개 데이터를 업로드하시겠습니까?`)) {
-      return;
-    }
 
-    let success = 0;
-
-    for (let stat of allStats) {
-      try {
-        const url = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(stat.qrText) + '&sessionId=' + encodeURIComponent(stat.sessionId);
-        
-        const result = await fetchWithRetry(url, 2);
-        
-        if (result.success) {
-          success++;
-        }
-      } catch (error) {
-        // 무시
-      }
-    }
-
-    if (success > 0) {
-      for (let i = 0; i < success && i < allStats.length; i++) {
-        const key = `localStats_${allStats[i].qrText}`;
-        localStorage.removeItem(key);
-      }
-      updateOfflineCount();
-      alert(`✅ ${success}개 업로드 완료`);
-    } else {
-      alert('❌ 업로드 실패');
-    }
-  }
-
-  function clearData() {
-    if (confirm('정말로 로컬 데이터를 모두 삭제하시겠습니까?')) {
-      const allStats = getAllLocalStats();
-      for (let stat of allStats) {
-        const key = `localStats_${stat.qrText}`;
-        localStorage.removeItem(key);
-      }
-      updateOfflineCount();
-      alert('✅ 삭제됨');
-    }
-  }
-
-  function batchEndSession() {
-    const allStats = getAllLocalStats();
-    
-    if (allStats.length === 0) {
-      alert('스캔된 학생이 없습니다');
-      return;
-    }
-
-    if (confirm(`${allStats.length}명 학생을 종료하시겠습니까?\n(현재 시간으로 기록됩니다)`)) {
-      const now = Date.now();
-
-      for (let stat of allStats) {
-        const first = new Date(stat.firstScanTime);
-        const diffSec = Math.round((now - first) / 1000);
-        const mins = Math.floor(diffSec / 60);
-        const secs = diffSec % 60;
-        const totalTime = mins + ':' + String(secs).padStart(2, '0');
-
-        saveLocalStats(
-          stat.qrText,
-          stat.scanCount,
-          stat.distance,
-          totalTime,
-          stat.studentName,
-          stat.firstScanTime,
-          now,
-          stat.classNum,
-          stat.studentNum
-        );
-      }
-
-      stopCamera();
-      alert('✅ 모든 학생 종료됨');
-      
-      setTimeout(() => {
-        localStorage.clear();
-        location.reload();
-      }, 2000);
-    }
-  }
 
   init();
   
