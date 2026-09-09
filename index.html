@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>바퀴 카운팅</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { 
+      font-family: 'Noto Sans KR', sans-serif; 
+      background: #f5f5f5; 
+      padding: 20px; 
+    }
+    .container { 
+      max-width: 600px; 
+      margin: 0 auto; 
+      background: white; 
+      border-radius: 10px; 
+      padding: 20px; 
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+    }
+    h1 { 
+      color: #4285F4; 
+      text-align: center; 
+      margin-bottom: 20px; 
+      font-size: 28px;
+    }
+    .camera-section {
+      position: relative;
+      margin-bottom: 20px;
+      background: #000;
+      border: 2px solid #4285F4;
+      border-radius: 8px;
+      overflow: hidden;
+      aspect-ratio: 4/3;
+    }
+    #video { 
+      width: 100%;
+      height: 100%;
+      display: block;
+      background: #000;
+      object-fit: cover;
+    }
+    #canvas { display: none; }
+    button { 
+      background: #4285F4; 
+      color: white;
+      border: none; 
+      padding: 12px 24px; 
+      font-size: 16px; 
+      border-radius: 5px; 
+      cursor: pointer; 
+      margin: 5px; 
+      width: calc(50% - 7.5px);
+      transition: background 0.3s;
+    }
+    button:hover { 
+      background: #357ae8; 
+    }
+    button:disabled { 
+      background: #ccc; 
+      cursor: not-allowed; 
+    }
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .message { 
+      padding: 10px; 
+      margin: 10px 0; 
+      border-radius: 5px; 
+      display: none; 
+    }
+    .message.show { display: block; }
+    .success { 
+      background: #d4edda; 
+      border: 1px solid #28a745; 
+      color: #155724;
+    }
+    .error { 
+      background: #f8d7da; 
+      border: 1px solid #f5c6cb; 
+      color: #721c24;
+    }
+    .info { 
+      background: #d1ecf1; 
+      border: 1px solid #bee5eb; 
+      color: #0c5460;
+    }
+    .stats { 
+      background: #f0f7ff;
+      border: 2px solid #4285F4;
+      padding: 15px; 
+      border-radius: 8px; 
+      margin: 15px 0; 
+      text-align: center; 
+    }
+    .stats h3 {
+      color: #4285F4;
+      margin-bottom: 10px;
+    }
+    .stats p { 
+      margin: 10px 0; 
+      font-size: 16px; 
+    }
+    .stats strong { 
+      color: #34A853; 
+    }
+    .section {
+      background: #f9f9f9;
+      border: 0.5px solid #e0e0e0;
+      padding: 15px;
+      border-radius: 8px;
+      margin: 10px 0;
+    }
+    .section h3 {
+      color: #4285F4;
+      margin-bottom: 10px;
+      font-size: 16px;
+    }
+    .section p {
+      font-size: 14px;
+      color: #666;
+      margin-bottom: 10px;
+    }
+    .data-count {
+      font-size: 18px;
+      font-weight: bold;
+      color: #4285F4;
+      margin: 10px 0;
+    }
+    button.upload {
+      background: #34A853;
+      width: 100%;
+    }
+    button.upload:hover {
+      background: #2d8e47;
+    }
+    button.delete {
+      background: #f44336;
+      width: 100%;
+    }
+    button.delete:hover {
+      background: #da190b;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>바퀴 카운팅 시스템</h1>
+  
+  <div class="camera-section">
+    <video id="video" playsinline></video>
+    <canvas id="canvas"></canvas>
+  </div>
+  
+  <div class="button-group">
+    <button id="startBtn" onclick="startCamera()">카메라 시작</button>
+    <button id="stopBtn" onclick="stopCamera()" disabled>카메라 중지</button>
+  </div>
+  
+  <div id="message" class="message"></div>
+  
+  <div id="stats" class="stats" style="display:none;">
+    <h3>현재 통계</h3>
+    <p>누적 스캔: <strong id="scanCount">0</strong></p>
+    <p id="lastStudent" style="display:none;">마지막 학생: <strong id="lastName">-</strong></p>
+  </div>
+  
+  <div class="section">
+    <h3>오프라인 데이터 관리</h3>
+    <p>로컬 저장 데이터</p>
+    <div class="data-count">총 <span id="localCount">0</span>개</div>
+    <button class="upload" onclick="uploadData()">데이터 업로드</button>
+    <button class="delete" onclick="clearData()" style="margin-top: 5px;">로컬 데이터 삭제</button>
+  </div>
+</div>
+
+<script>
+  let video = document.getElementById('video');
+  let canvas = document.getElementById('canvas');
+  let canvasContext = canvas.getContext('2d');
+  let scanning = false;
+  let db;
+  let cameraStarted = false;
+  
+  const dbRequest = indexedDB.open('LapCountingDB', 1);
+  
+  dbRequest.onerror = function() { 
+    console.error('DB 열기 실패');
+  };
+  
+  dbRequest.onupgradeneeded = function(e) {
+    db = e.target.result;
+    if (!db.objectStoreNames.contains('scans')) {
+      db.createObjectStore('scans', { keyPath: 'id', autoIncrement: true });
+    }
+  };
+  
+  dbRequest.onsuccess = function(e) {
+    db = e.target.result;
+    console.log('DB 준비 완료');
+    updateLocalCount();
+  };
+
+  async function startCamera() {
+    if (cameraStarted) return;
+    cameraStarted = true;
+    
+    try {
+      console.log('카메라 요청 중...');
+      
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'environment' }
+      }).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
+      
+      console.log('카메라 스트림 획득 성공');
+      
+      video.srcObject = stream;
+      video.play();
+      
+      console.log('비디오 재생 시작');
+      
+      document.getElementById('startBtn').disabled = true;
+      document.getElementById('stopBtn').disabled = false;
+      scanning = true;
+      
+      setTimeout(scan, 100);
+      
+    } catch (error) {
+      console.error('카메라 오류:', error);
+      showMessage('카메라 오류: ' + error.message, 'error');
+      cameraStarted = false;
+      document.getElementById('startBtn').disabled = false;
+    }
+  }
+
+  function stopCamera() {
+    console.log('카메라 중지');
+    const stream = video.srcObject;
+    if (stream) {
+      stream.getTracks().forEach(function(track) { 
+        track.stop(); 
+      });
+    }
+    scanning = false;
+    cameraStarted = false;
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('stopBtn').disabled = true;
+  }
+
+  function scan() {
+    if (!scanning) return;
+    
+    try {
+      if (video.readyState === video.HAVE_ENOUGH_DATA) {
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvasContext.drawImage(video, 0, 0);
+        
+        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+        const code = jsQR(imageData.data, canvas.width, canvas.height);
+        
+        if (code) {
+          console.log('QR 코드 감지:', code.data);
+          handleQRData(code.data);
+          return;
+        }
+      }
+    } catch (e) {
+      console.error('QR 스캔 오류:', e);
+    }
+    
+    requestAnimationFrame(scan);
+  }
+
+  async function handleQRData(qrText) {
+    try {
+      console.log('QR 데이터 처리:', qrText);
+      showMessage('처리 중...', 'info');
+      
+      const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText);
+      
+      const response = await fetch(appScriptUrl);
+      const result = await response.json();
+      
+      console.log('Apps Script 응답:', result);
+      
+      if (result.success) {
+        saveToLocal(qrText, result.student);
+        updateDisplay(result.student);
+        showMessage('성공: ' + result.message, 'success');
+      } else {
+        showMessage('오류: ' + result.message, 'error');
+      }
+    } catch (error) {
+      console.log('온라인 실패, 오프라인 모드:', error.message);
+      
+      const parts = qrText.split('-');
+      if (parts.length === 2) {
+        const student = {
+          classNum: parseInt(parts[0]),
+          studentNum: parseInt(parts[1]),
+          name: parts[0] + '반 ' + parts[1] + '번'
+        };
+        saveToLocal(qrText, student);
+        updateDisplay(student);
+        showMessage('오프라인: 로컬에 저장되었습니다', 'success');
+      } else {
+        showMessage('오류: QR 형식 오류', 'error');
+      }
+    }
+    
+    scanning = false;
+    setTimeout(function() {
+      startCamera();
+    }, 1500);
+  }
+
+  function saveToLocal(qrText, student) {
+    if (!db) {
+      console.error('DB가 준비되지 않음');
+      return;
+    }
+    
+    try {
+      const transaction = db.transaction(['scans'], 'readwrite');
+      const store = transaction.objectStore('scans');
+      store.add({
+        qr: qrText,
+        student: student,
+        timestamp: new Date().toISOString()
+      });
+      
+      transaction.oncomplete = function() {
+        console.log('로컬 저장 완료');
+        updateLocalCount();
+      };
+    } catch (e) {
+      console.error('로컬 저장 오류:', e);
+    }
+  }
+
+  function updateDisplay(student) {
+    document.getElementById('stats').style.display = 'block';
+    const count = parseInt(document.getElementById('scanCount').textContent) + 1;
+    document.getElementById('scanCount').textContent = count;
+    document.getElementById('lastStudent').style.display = 'block';
+    document.getElementById('lastName').textContent = student.name;
+  }
+
+  function showMessage(msg, type) {
+    const msgDiv = document.getElementById('message');
+    msgDiv.textContent = msg;
+    msgDiv.className = 'message show ' + (type || 'info');
+    
+    setTimeout(function() {
+      msgDiv.classList.remove('show');
+    }, 3000);
+  }
+
+  function updateLocalCount() {
+    if (!db) return;
+    
+    try {
+      const transaction = db.transaction(['scans'], 'readonly');
+      const store = transaction.objectStore('scans');
+      const request = store.count();
+      
+      request.onsuccess = function() {
+        document.getElementById('localCount').textContent = request.result;
+      };
+    } catch (e) {
+      console.error('카운트 오류:', e);
+    }
+  }
+
+  async function uploadData() {
+    if (!db) {
+      showMessage('DB가 준비되지 않음', 'error');
+      return;
+    }
+    
+    showMessage('업로드 중...', 'info');
+    
+    const transaction = db.transaction(['scans'], 'readonly');
+    const store = transaction.objectStore('scans');
+    const request = store.getAll();
+    
+    request.onsuccess = async function() {
+      const scans = request.result;
+      
+      if (scans.length === 0) {
+        showMessage('업로드할 데이터 없음', 'error');
+        return;
+      }
+      
+      let success = 0;
+      let fail = 0;
+      
+      for (let i = 0; i < scans.length; i++) {
+        const scan = scans[i];
+        
+        try {
+          const res = await fetch('https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(scan.qr));
+          const result = await res.json();
+          
+          if (result.success) {
+            success++;
+            deleteFromDB(scan.id);
+          } else {
+            fail++;
+          }
+        } catch (e) {
+          console.error('업로드 오류:', e);
+          fail++;
+        }
+      }
+      
+      showMessage('업로드 완료: 성공 ' + success + '개, 실패 ' + fail + '개', 'success');
+      updateLocalCount();
+    };
+  }
+
+  function deleteFromDB(id) {
+    const transaction = db.transaction(['scans'], 'readwrite');
+    const store = transaction.objectStore('scans');
+    store.delete(id);
+  }
+
+  function clearData() {
+    if (confirm('정말로 로컬 데이터를 모두 삭제하시겠습니까?')) {
+      const transaction = db.transaction(['scans'], 'readwrite');
+      const store = transaction.objectStore('scans');
+      store.clear();
+      
+      transaction.oncomplete = function() {
+        updateLocalCount();
+        document.getElementById('scanCount').textContent = '0';
+        document.getElementById('stats').style.display = 'none';
+        showMessage('데이터가 삭제되었습니다', 'success');
+      };
+    }
+  }
+
+  console.log('페이지 로드 완료');
+</script>
+
+</body>
+</html>
