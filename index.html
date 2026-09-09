@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>바퀴 카운팅</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsQR/1.4.0/jsQR.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
@@ -38,7 +38,7 @@
     #video { 
       width: 100%;
       height: 100%;
-      display: block;
+      display: none;
       background: #000;
       object-fit: cover;
     }
@@ -222,6 +222,19 @@
     button.delete:hover {
       background: #da190b;
     }
+    .debug-info {
+      background: #fff3cd;
+      border: 1px solid #ffc107;
+      color: #856404;
+      padding: 10px;
+      border-radius: 5px;
+      font-size: 12px;
+      margin-top: 10px;
+      display: none;
+    }
+    .debug-info.show {
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -230,7 +243,7 @@
   <h1>바퀴 카운팅 시스템</h1>
   
   <div class="camera-section">
-    <video id="video" playsinline></video>
+    <video id="video" autoplay muted playsinline></video>
     <canvas id="canvas"></canvas>
   </div>
   
@@ -265,6 +278,13 @@
     <button class="upload" onclick="uploadData()">데이터 업로드</button>
     <button class="delete" onclick="clearData()">로컬 데이터 전부 삭제</button>
   </div>
+
+  <div id="debugInfo" class="debug-info">
+    <strong>디버그 정보:</strong><br>
+    jsQR 라이브러리: <span id="jsqrStatus">확인중...</span><br>
+    비디오 상태: <span id="videoStatus">대기중</span><br>
+    스캔 상태: <span id="scanStatus">정지</span>
+  </div>
 </div>
 
 <script>
@@ -274,6 +294,20 @@
   let scanning = false;
   let db;
   let cameraStarted = false;
+  let frameCount = 0;
+  let lastQRData = null;
+  let qrCooldown = false;
+  
+  // jsQR 라이브러리 로드 확인
+  setTimeout(() => {
+    if (typeof jsQR === 'function') {
+      console.log('✅ jsQR 라이브러리 로드 성공');
+      document.getElementById('jsqrStatus').textContent = '✅ 로드됨';
+    } else {
+      console.error('❌ jsQR 라이브러리 로드 실패');
+      document.getElementById('jsqrStatus').textContent = '❌ 로드 실패';
+    }
+  }, 500);
   
   const dbRequest = indexedDB.open('LapCountingDB', 1);
   
@@ -297,33 +331,47 @@
   async function startCamera() {
     if (cameraStarted) return;
     cameraStarted = true;
+    frameCount = 0;
     
     try {
-      console.log('카메라 요청 중...');
+      console.log('📷 카메라 요청 중...');
+      document.getElementById('videoStatus').textContent = '요청중...';
       
       const facingMode = document.getElementById('cameraSelect').value;
       console.log('선택된 카메라:', facingMode === 'environment' ? '후면' : '전면');
       
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: facingMode }
-      }).catch(() => navigator.mediaDevices.getUserMedia({ video: true }));
+      const constraints = {
+        video: { 
+          facingMode: facingMode,
+          width: { ideal: 1280 },
+          height: { ideal: 720 }
+        },
+        audio: false
+      };
       
-      console.log('카메라 스트림 획득 성공');
+      const stream = await navigator.mediaDevices.getUserMedia(constraints);
+      console.log('✅ 카메라 스트림 획득 성공');
       
       video.srcObject = stream;
-      video.play();
+      video.style.display = 'block';
       
-      console.log('비디오 재생 시작');
+      // autoplay 확인
+      await video.play().catch(e => console.error('비디오 재생 오류:', e));
+      console.log('✅ 비디오 재생 시작');
       
+      document.getElementById('videoStatus').textContent = '🟢 실행중';
       document.getElementById('startBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
       document.getElementById('cameraSelect').disabled = true;
       scanning = true;
+      document.getElementById('scanStatus').textContent = '🟢 스캔중';
       
-      setTimeout(scan, 100);
+      // 약간의 지연 후 스캔 시작
+      setTimeout(scan, 200);
       
     } catch (error) {
-      console.error('카메라 오류:', error);
+      console.error('❌ 카메라 오류:', error.name, error.message);
+      document.getElementById('videoStatus').textContent = '❌ 오류: ' + error.message;
       showMessage('카메라 오류: ' + error.message, 'error');
       cameraStarted = false;
       document.getElementById('startBtn').disabled = false;
@@ -338,8 +386,11 @@
         track.stop(); 
       });
     }
+    video.style.display = 'none';
     scanning = false;
     cameraStarted = false;
+    document.getElementById('videoStatus').textContent = '⏸️ 중지됨';
+    document.getElementById('scanStatus').textContent = '⏸️ 정지';
     document.getElementById('startBtn').disabled = false;
     document.getElementById('stopBtn').disabled = true;
     document.getElementById('cameraSelect').disabled = false;
@@ -349,18 +400,48 @@
     if (!scanning) return;
     
     try {
+      frameCount++;
+      
+      // 비디오 데이터가 준비되었을 때만 처리
       if (video.readyState === video.HAVE_ENOUGH_DATA) {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-        canvasContext.drawImage(video, 0, 0);
         
-        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
-        const code = jsQR(imageData.data, canvas.width, canvas.height);
-        
-        if (code) {
-          console.log('QR 코드 감지:', code.data);
-          handleQRData(code.data);
+        if (canvas.width === 0 || canvas.height === 0) {
+          console.warn('비디오 크기 오류:', canvas.width, 'x', canvas.height);
+          requestAnimationFrame(scan);
           return;
+        }
+        
+        canvasContext.drawImage(video, 0, 0);
+        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+        
+        // jsQR 호출
+        if (typeof jsQR === 'function') {
+          const code = jsQR(imageData.data, canvas.width, canvas.height);
+          
+          // 프레임 로깅 (매 30프레임마다)
+          if (frameCount % 30 === 0) {
+            console.log('프레임', frameCount, ':', code ? '✅ QR 감지됨: ' + code.data : '❌ QR 미감지');
+          }
+          
+          if (code && !qrCooldown) {
+            // 같은 QR이 반복 스캔되는 것 방지
+            if (lastQRData === code.data) {
+              console.log('⚠️ 같은 QR 연속 감지, 무시됨');
+              requestAnimationFrame(scan);
+              return;
+            }
+            
+            console.log('✅ QR 코드 감지:', code.data);
+            lastQRData = code.data;
+            qrCooldown = true;
+            
+            handleQRData(code.data);
+            return;
+          }
+        } else {
+          console.error('jsQR 함수를 찾을 수 없음');
         }
       }
     } catch (e) {
@@ -371,26 +452,34 @@
   }
 
   async function handleQRData(qrText) {
+    scanning = false;
+    document.getElementById('scanStatus').textContent = '⏸️ 처리중';
+    
     try {
-      console.log('QR 데이터 처리:', qrText);
+      console.log('📤 QR 데이터 처리:', qrText);
       showMessage('처리 중...', 'info');
       
       const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText);
       
-      const response = await fetch(appScriptUrl);
-      const result = await response.json();
+      console.log('요청 URL:', appScriptUrl);
       
-      console.log('Apps Script 응답:', result);
+      const response = await fetch(appScriptUrl, { 
+        method: 'GET',
+        mode: 'no-cors'
+      });
+      
+      const result = await response.json();
+      console.log('✅ Apps Script 응답:', result);
       
       if (result.success) {
-        saveToLocal(qrText, result.student);
-        updateDisplay(result.student);
+        saveToLocal(qrText, result.data.student);
+        updateDisplay(result.data.student);
         showMessage('성공: ' + result.message, 'success');
       } else {
         showMessage('오류: ' + result.message, 'error');
       }
     } catch (error) {
-      console.log('온라인 실패, 오프라인 모드:', error.message);
+      console.log('📴 온라인 실패, 오프라인 모드:', error.message);
       
       const parts = qrText.split('-');
       if (parts.length === 2) {
@@ -403,13 +492,16 @@
         updateDisplay(student);
         showMessage('오프라인: 로컬에 저장되었습니다', 'success');
       } else {
-        showMessage('오류: QR 형식 오류', 'error');
+        showMessage('오류: QR 형식 오류 (' + qrText + ')', 'error');
       }
     }
     
-    scanning = false;
+    // 쿨다운 후 재시작
     setTimeout(function() {
-      startCamera();
+      qrCooldown = false;
+      scanning = true;
+      document.getElementById('scanStatus').textContent = '🟢 스캔중';
+      scan();
     }, 1500);
   }
 
@@ -429,11 +521,11 @@
       });
       
       transaction.oncomplete = function() {
-        console.log('로컬 저장 완료');
+        console.log('✅ 로컬 저장 완료');
         updateLocalCount();
       };
     } catch (e) {
-      console.error('로컬 저장 오류:', e);
+      console.error('❌ 로컬 저장 오류:', e);
     }
   }
 
@@ -600,7 +692,11 @@
     }
   }
 
-  console.log('페이지 로드 완료');
+  console.log('🚀 페이지 로드 완료');
+  console.log('jsQR 버전: https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js');
+  
+  // 디버그 정보 표시
+  document.getElementById('debugInfo').classList.add('show');
 </script>
 
 </body>
