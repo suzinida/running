@@ -539,7 +539,6 @@
   function calculatePace(totalSeconds, distance) {
     if (distance === 0) return null;
     
-    // 분/km = 총시간(초) / 거리(km) / 60
     const paceMinutes = (totalSeconds / distance) / 60;
     const paceMin = Math.floor(paceMinutes);
     const paceSec = Math.round((paceMinutes - paceMin) * 60);
@@ -560,7 +559,7 @@
   // ================================================
   // 로컬 데이터 관리
   // ================================================
-  function saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime) {
+  function saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime, classNum, studentNum) {
     const key = `localStats_${qrText}`;
     
     localStorage.setItem(key, JSON.stringify({
@@ -569,10 +568,12 @@
       distance: distance,
       totalTime: totalTime,
       studentName: studentName,
-      firstScanTime: firstScanTime,
+      firstScanTime: firstScanTime,  // 타임스탐프 (숫자)
       lastScanTime: lastScanTime,
       sessionId: currentSessionId,
-      lastProcessTime: Date.now()
+      lastProcessTime: Date.now(),
+      classNum: classNum,
+      studentNum: studentNum
     }));
   }
 
@@ -641,7 +642,6 @@
       title.classList.add('running-end');
       statsDiv.classList.add('running-end');
       
-      // 페이스 계산
       const totalSeconds = timeStringToSeconds(totalTime);
       const pace = calculatePace(totalSeconds, distance);
       
@@ -654,13 +654,12 @@
         </div>
       `;
     } else {
-      // 두 번째 이상
+      // 두 번째 이상 - 자율 모드든 거리제한 모드든 항상 표시
       icon.textContent = '📍';
-      title.textContent = `${String(studentData.studentNum).padStart(3, '0')}번 학생`;
+      title.textContent = `${studentData.classNum}반 ${studentData.studentNum}번 학생`;
       title.classList.remove('running-start', 'running-end');
       statsDiv.classList.remove('running-start', 'running-end');
       
-      // 페이스 계산
       const totalSeconds = timeStringToSeconds(totalTime);
       const pace = calculatePace(totalSeconds, distance);
       
@@ -922,6 +921,13 @@
     // 30초 중복 체크
     if (isDuplicateWithin30Seconds(qrText)) {
       displayDuplicate(qrText);
+      
+      // 3초 후 통계 카드 숨김
+      setTimeout(() => {
+        const statsDiv = document.getElementById('stats');
+        statsDiv.style.display = 'none';
+      }, 3000);
+      
       resumeScanning();
       return;
     }
@@ -939,10 +945,13 @@
           const totalTime = result.data.accumulated.timeFormatted || "00:00:00";
           const studentData = result.data.student;
           
-          // 로컬에도 저장
-          const firstScanTime = result.data.accumulated.firstScanTime || new Date().toLocaleString('ko-KR');
-          const lastScanTime = new Date().toLocaleString('ko-KR');
-          saveLocalStats(qrText, scanCount, distance, totalTime, studentData.name, firstScanTime, lastScanTime);
+          // 로컬에도 저장 (타임스탐프 사용)
+          const firstScanTime = result.data.accumulated.firstScanTime || Date.now();
+          const lastScanTime = Date.now();
+          const classNum = studentData.classNum;
+          const studentNum = studentData.studentNum;
+          
+          saveLocalStats(qrText, scanCount, distance, totalTime, studentData.name, firstScanTime, lastScanTime, classNum, studentNum);
           updateOfflineCount();
           
           // 통계 표시
@@ -971,8 +980,8 @@
       return;
     }
 
-    const classNum = parseInt(parts[0]);
-    const studentNum = parseInt(parts[1]);
+    const classNum = parts[0];  // 문자열 유지: "01"
+    const studentNum = parts[1];  // 문자열 유지: "001"
     const studentName = localData ? localData.studentName : `${classNum}반 ${studentNum}번`;
 
     let scanCount, distance, totalTime, firstScanTime;
@@ -981,7 +990,7 @@
       // 기존 로컬 데이터 누적
       scanCount = localData.scanCount + 1;
       distance = localData.distance + 0.2;
-      firstScanTime = localData.firstScanTime;
+      firstScanTime = localData.firstScanTime;  // 타임스탐프
       
       // 시간 계산
       const first = new Date(firstScanTime);
@@ -994,16 +1003,16 @@
       // 새로운 학생
       scanCount = 1;
       distance = 0.2;
-      firstScanTime = new Date().toLocaleString('ko-KR');
+      firstScanTime = Date.now();  // 타임스탐프
       totalTime = '00:00:00';
     }
 
-    const lastScanTime = new Date().toLocaleString('ko-KR');
-    saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime);
+    const lastScanTime = Date.now();  // 타임스탐프
+    saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime, classNum, studentNum);
     updateOfflineCount();
 
     // 통계 표시
-    const studentData = { name: studentName, studentNum: studentNum };
+    const studentData = { name: studentName, classNum: classNum, studentNum: studentNum };
     const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
     displayStats(studentData, scanCount, distance, totalTime, isEnded);
 
@@ -1093,7 +1102,7 @@
     }
 
     if (confirm(`${allStats.length}명 학생을 종료하시겠습니까?\n(현재 시간으로 기록됩니다)`)) {
-      const now = new Date();
+      const now = Date.now();
 
       // 모든 학생의 lastScanTime을 현재 시간으로 업데이트
       for (let stat of allStats) {
@@ -1110,7 +1119,9 @@
           totalTime,
           stat.studentName,
           stat.firstScanTime,
-          now.toLocaleString('ko-KR')
+          now,
+          stat.classNum,
+          stat.studentNum
         );
       }
 
