@@ -425,7 +425,7 @@
 <body>
 
 <div class="container">
-  <h1>🏃 러닝 기록</h1>
+  <h1>🏃 러닝 기록 프로그램</h1>
   
   <div class="session-header">
     <div class="session-info">
@@ -531,6 +531,9 @@
   let lastQRData = null;
   let qrCooldown = false;
   let scanLoopInterval = null;
+  
+  // 이전 통계 화면 저장
+  let previousStatsState = null;
   
   // 세션 설정
   let currentSessionId = null;
@@ -763,6 +766,16 @@
         </div>
       `;
     }
+    
+    // 이전 상태 저장
+    previousStatsState = {
+      display: statsDiv.style.display,
+      classes: Array.from(statsDiv.classList),
+      icon: icon.textContent,
+      title: title.textContent,
+      titleClasses: Array.from(title.classList),
+      info: info.innerHTML
+    };
   }
 
   function displayDuplicate(qrText) {
@@ -779,6 +792,28 @@
     title.textContent = '이미 처리된 QR코드';
     title.classList.add('duplicate');
     info.innerHTML = '<div style="font-size: 13px; color: #d32f2f;">30초 이내에 중복 스캔되었습니다</div>';
+    
+    // 10초 후 이전 상태로 복구
+    setTimeout(() => {
+      if (previousStatsState) {
+        statsDiv.style.display = previousStatsState.display;
+        statsDiv.className = 'stats';
+        previousStatsState.classes.forEach(cls => {
+          if (cls !== 'stats') statsDiv.classList.add(cls);
+        });
+        
+        icon.textContent = previousStatsState.icon;
+        title.textContent = previousStatsState.title;
+        title.className = 'stats-title';
+        previousStatsState.titleClasses.forEach(cls => {
+          if (cls !== 'stats-title') title.classList.add(cls);
+        });
+        
+        info.innerHTML = previousStatsState.info;
+      } else {
+        statsDiv.style.display = 'none';
+      }
+    }, 10000);
   }
 
   // ================================================
@@ -831,6 +866,9 @@
     if (mode === 'maxDistance') {
       document.getElementById('maxDistanceBtn').classList.add('selected');
       document.getElementById('distanceInputGroup').style.display = 'block';
+      
+      // 거리 입력 필드 이벤트 리스너 추가
+      document.getElementById('maxDistanceInput').addEventListener('input', updateConfirmButtonState);
     } else {
       document.getElementById('freeBtn').classList.add('selected');
       document.getElementById('distanceInputGroup').style.display = 'none';
@@ -842,7 +880,12 @@
   function updateConfirmButtonState() {
     const period = document.getElementById('periodInput').value;
     const hasMode = selectedMode !== null;
-    const hasDistance = selectedMode !== 'maxDistance' || document.getElementById('maxDistanceInput').value;
+    let hasDistance = true;
+    
+    if (selectedMode === 'maxDistance') {
+      const distanceValue = parseFloat(document.getElementById('maxDistanceInput').value);
+      hasDistance = distanceValue && distanceValue > 0;
+    }
     
     document.getElementById('confirmModeBtn').disabled = !(hasMode && period && hasDistance);
   }
@@ -1040,13 +1083,6 @@
     // 30초 중복 체크
     if (isDuplicateWithin30Seconds(qrText)) {
       displayDuplicate(qrText);
-      
-      // 3초 후 통계 카드 숨김
-      setTimeout(() => {
-        const statsDiv = document.getElementById('stats');
-        statsDiv.style.display = 'none';
-      }, 3000);
-      
       resumeScanning();
       return;
     }
