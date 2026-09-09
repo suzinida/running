@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>바퀴 카운팅</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+  <title>러닝 기록 시스템</title>
+  <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { 
@@ -122,7 +122,6 @@
       gap: 10px;
       margin-bottom: 20px;
     }
-
     .message { 
       padding: 10px; 
       margin: 10px 0; 
@@ -418,6 +417,7 @@
   <div id="debugInfo" class="debug-info">
     <strong>디버그 정보:</strong><br>
     jsQR 라이브러리: <span id="jsqrStatus">확인중...</span><br>
+    저장소: <span id="storageStatus">확인중...</span><br>
     비디오 상태: <span id="videoStatus">대기중</span><br>
     스캔 상태: <span id="scanStatus">정지</span><br>
     세션ID: <span id="sessionId">준비중...</span>
@@ -454,13 +454,14 @@
   let canvas = document.getElementById('canvas');
   let canvasContext = canvas.getContext('2d');
   let scanning = false;
-  let db;
+  let db = null;
   let cameraStarted = false;
   let frameCount = 0;
   let lastQRData = null;
   let qrCooldown = false;
   
-  // 세션ID 관리
+  // 저장소 타입 관리
+  let useIndexedDB = true;
   let currentSessionId = null;
   
   // jsQR 라이브러리 로드 확인
@@ -474,33 +475,49 @@
     }
   }, 500);
   
-  const dbRequest = indexedDB.open('LapCountingDB', 1);
-  
-  dbRequest.onerror = function() { 
-    console.error('DB 열기 실패');
-  };
-  
-  dbRequest.onupgradeneeded = function(e) {
-    db = e.target.result;
-    if (!db.objectStoreNames.contains('scans')) {
-      db.createObjectStore('scans', { keyPath: 'id', autoIncrement: true });
+  // ================================================
+  // IndexedDB 또는 localStorage 초기화
+  // ================================================
+  function initializeStorage() {
+    if (!window.indexedDB) {
+      console.warn('IndexedDB 미지원, localStorage 사용');
+      useIndexedDB = false;
+      document.getElementById('storageStatus').textContent = '📦 localStorage';
+      initializeSession();
+      return;
     }
-  };
-  
-  dbRequest.onsuccess = function(e) {
-    db = e.target.result;
-    console.log('DB 준비 완료');
-    initializeSession();
-  };
+
+    const dbRequest = indexedDB.open('LapCountingDB', 1);
+    
+    dbRequest.onerror = function() { 
+      console.error('❌ IndexedDB 접근 불가 (Tracking Prevention), localStorage 사용');
+      useIndexedDB = false;
+      document.getElementById('storageStatus').textContent = '📦 localStorage';
+      initializeSession();
+    };
+    
+    dbRequest.onupgradeneeded = function(e) {
+      db = e.target.result;
+      if (!db.objectStoreNames.contains('scans')) {
+        db.createObjectStore('scans', { keyPath: 'id', autoIncrement: true });
+      }
+    };
+    
+    dbRequest.onsuccess = function(e) {
+      db = e.target.result;
+      useIndexedDB = true;
+      console.log('✅ IndexedDB 준비 완료');
+      document.getElementById('storageStatus').textContent = '✅ IndexedDB';
+      initializeSession();
+    };
+  }
 
   // ================================================
   // 세션 초기화
   // ================================================
   function initializeSession() {
-    // LocalStorage에서 세션ID 가져오기
     currentSessionId = localStorage.getItem('currentSessionId');
     
-    // 없으면 새로 생성
     if (!currentSessionId) {
       generateNewSessionId();
     } else {
@@ -533,17 +550,11 @@
   }
 
   // ================================================
-  // 새 세션ID 생성 (타임스탐프 기반)
+  // 새 세션ID 생성
   // ================================================
   function generateNewSessionId() {
     const now = new Date();
     const timestamp = now.getTime();
-    const dateStr = now.toLocaleString('ko-KR', {
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit'
-    }).replace(/\s/g, '').replace(/[^0-9]/g, '');
     
     currentSessionId = 'SESSION_' + timestamp;
     localStorage.setItem('currentSessionId', currentSessionId);
@@ -564,7 +575,7 @@
     
     document.getElementById('sessionDisplay').textContent = dateStr;
     document.getElementById('sessionId').textContent = currentSessionId;
-    console.log('현재 세션ID:', currentSessionId);
+    console.log('✅ 현재 세션ID:', currentSessionId);
   }
 
   // ================================================
@@ -580,7 +591,6 @@
       document.getElementById('videoStatus').textContent = '요청중...';
       
       const facingMode = document.getElementById('cameraSelect').value;
-      console.log('선택된 카메라:', facingMode === 'environment' ? '후면' : '전면');
       
       const constraints = {
         video: { 
@@ -619,7 +629,7 @@
   }
 
   function stopCamera() {
-    console.log('카메라 중지');
+    console.log('⏹️ 카메라 중지');
     const stream = video.srcObject;
     if (stream) {
       stream.getTracks().forEach(function(track) { 
@@ -647,7 +657,7 @@
         canvas.height = video.videoHeight;
         
         if (canvas.width === 0 || canvas.height === 0) {
-          console.warn('비디오 크기 오류:', canvas.width, 'x', canvas.height);
+          console.warn('비디오 크기 오류');
           requestAnimationFrame(scan);
           return;
         }
@@ -693,25 +703,30 @@
     
     try {
       console.log('📤 QR 데이터 처리:', qrText);
+      console.log('🔑 세션ID:', currentSessionId);
       showMessage('처리 중...', 'info');
       
       const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText) + '&sessionId=' + encodeURIComponent(currentSessionId);
       
-      console.log('요청 URL:', appScriptUrl);
+      console.log('📍 요청 URL:', appScriptUrl);
       
       const response = await fetch(appScriptUrl);
       const result = await response.json();
       console.log('✅ Apps Script 응답:', result);
+      console.log('📊 누적 데이터:', result.data?.accumulated);
       
       if (result.success) {
         saveToLocal(qrText, result.data.student);
         updateDisplay(result.data.student);
         
         const scanCount = result.data.accumulated.scanCount;
+        console.log('🔢 scanCount:', scanCount);
         
         if (scanCount === 1) {
+          console.log('1️⃣ 첫 스캔 - "러닝 시작!" 표시');
           showMessage('🏃 러닝 시작!', 'success');
         } else {
+          console.log('2️⃣ 다중 스캔 - 페이스 모달 표시');
           showMessage('성공: ' + result.message, 'success');
           showPaceModal(result.data.accumulated, result.data.pace);
         }
@@ -745,27 +760,41 @@
   }
 
   function saveToLocal(qrText, student) {
-    if (!db) {
-      console.error('DB가 준비되지 않음');
-      return;
+    const data = {
+      qr: qrText,
+      student: student,
+      timestamp: new Date().toISOString(),
+      sessionId: currentSessionId
+    };
+
+    if (useIndexedDB && db) {
+      try {
+        const transaction = db.transaction(['scans'], 'readwrite');
+        const store = transaction.objectStore('scans');
+        store.add(data);
+        
+        transaction.oncomplete = function() {
+          console.log('✅ IndexedDB 저장 완료');
+          updateLocalCount();
+        };
+      } catch (e) {
+        console.error('❌ IndexedDB 저장 오류, localStorage 사용:', e);
+        saveToLocalStorage(data);
+      }
+    } else {
+      saveToLocalStorage(data);
     }
-    
+  }
+
+  function saveToLocalStorage(data) {
     try {
-      const transaction = db.transaction(['scans'], 'readwrite');
-      const store = transaction.objectStore('scans');
-      store.add({
-        qr: qrText,
-        student: student,
-        timestamp: new Date().toISOString(),
-        sessionId: currentSessionId
-      });
-      
-      transaction.oncomplete = function() {
-        console.log('✅ 로컬 저장 완료');
-        updateLocalCount();
-      };
+      const scans = JSON.parse(localStorage.getItem('scans') || '[]');
+      scans.push(data);
+      localStorage.setItem('scans', JSON.stringify(scans));
+      console.log('✅ localStorage 저장 완료');
+      updateLocalCount();
     } catch (e) {
-      console.error('❌ 로컬 저장 오류:', e);
+      console.error('❌ localStorage 저장 오류:', e);
     }
   }
 
@@ -788,25 +817,41 @@
   }
 
   function updateLocalCount() {
-    if (!db) return;
-    
+    if (useIndexedDB && db) {
+      try {
+        const transaction = db.transaction(['scans'], 'readonly');
+        const store = transaction.objectStore('scans');
+        const request = store.count();
+        
+        request.onsuccess = function() {
+          document.getElementById('localCount').textContent = request.result;
+          displayScanList();
+        };
+      } catch (e) {
+        console.error('카운트 오류, localStorage 사용');
+        updateLocalCountFromStorage();
+      }
+    } else {
+      updateLocalCountFromStorage();
+    }
+  }
+
+  function updateLocalCountFromStorage() {
     try {
-      const transaction = db.transaction(['scans'], 'readonly');
-      const store = transaction.objectStore('scans');
-      const request = store.count();
-      
-      request.onsuccess = function() {
-        document.getElementById('localCount').textContent = request.result;
-        displayScanList();
-      };
+      const scans = JSON.parse(localStorage.getItem('scans') || '[]');
+      document.getElementById('localCount').textContent = scans.length;
+      displayScanListFromStorage(scans);
     } catch (e) {
-      console.error('카운트 오류:', e);
+      console.error('localStorage 읽기 오류:', e);
     }
   }
 
   function displayScanList() {
-    if (!db) return;
-    
+    if (!useIndexedDB || !db) {
+      updateLocalCountFromStorage();
+      return;
+    }
+
     try {
       const transaction = db.transaction(['scans'], 'readonly');
       const store = transaction.objectStore('scans');
@@ -814,107 +859,125 @@
       
       request.onsuccess = function() {
         const scans = request.result;
-        const scanList = document.getElementById('scanList');
-        
-        if (scans.length === 0) {
-          scanList.style.display = 'none';
-          return;
-        }
-        
-        scanList.style.display = 'block';
-        scanList.innerHTML = '';
-        
-        scans.forEach(function(scan, index) {
-          const item = document.createElement('div');
-          item.className = 'scan-item';
-          
-          const time = new Date(scan.timestamp).toLocaleTimeString('ko-KR', { 
-            hour: '2-digit', 
-            minute: '2-digit',
-            second: '2-digit'
-          });
-          
-          item.innerHTML = `
-            <div class="scan-info">
-              <p class="scan-qr">QR: ${scan.qr}</p>
-              <p class="scan-name">${scan.student.name}</p>
-              <p class="scan-time">${time}</p>
-            </div>
-            <button class="scan-delete" onclick="deleteScan(${scan.id})">삭제</button>
-          `;
-          
-          scanList.appendChild(item);
-        });
+        displayScanListFromStorage(scans);
       };
     } catch (e) {
       console.error('스캔 리스트 조회 오류:', e);
+      updateLocalCountFromStorage();
     }
+  }
+
+  function displayScanListFromStorage(scans) {
+    const scanList = document.getElementById('scanList');
+    
+    if (scans.length === 0) {
+      scanList.style.display = 'none';
+      return;
+    }
+    
+    scanList.style.display = 'block';
+    scanList.innerHTML = '';
+    
+    scans.forEach(function(scan, index) {
+      const item = document.createElement('div');
+      item.className = 'scan-item';
+      
+      const time = new Date(scan.timestamp).toLocaleTimeString('ko-KR', { 
+        hour: '2-digit', 
+        minute: '2-digit',
+        second: '2-digit'
+      });
+      
+      item.innerHTML = `
+        <div class="scan-info">
+          <p class="scan-qr">QR: ${scan.qr}</p>
+          <p class="scan-name">${scan.student.name}</p>
+          <p class="scan-time">${time}</p>
+        </div>
+        <button class="scan-delete" onclick="deleteScan(${index})">삭제</button>
+      `;
+      
+      scanList.appendChild(item);
+    });
   }
 
   function deleteScan(id) {
     if (!confirm('이 스캔을 삭제하시겠습니까?')) return;
     
-    const transaction = db.transaction(['scans'], 'readwrite');
-    const store = transaction.objectStore('scans');
-    store.delete(id);
-    
-    transaction.oncomplete = function() {
+    if (useIndexedDB && db) {
+      const transaction = db.transaction(['scans'], 'readwrite');
+      const store = transaction.objectStore('scans');
+      store.delete(id);
+      
+      transaction.oncomplete = function() {
+        updateLocalCount();
+        showMessage('스캔이 삭제되었습니다', 'success');
+      };
+    } else {
+      const scans = JSON.parse(localStorage.getItem('scans') || '[]');
+      scans.splice(id, 1);
+      localStorage.setItem('scans', JSON.stringify(scans));
       updateLocalCount();
       showMessage('스캔이 삭제되었습니다', 'success');
-    };
+    }
   }
 
   async function uploadData() {
-    if (!db) {
-      showMessage('DB가 준비되지 않음', 'error');
+    showMessage('업로드 중...', 'info');
+    
+    let scans = [];
+    if (useIndexedDB && db) {
+      const transaction = db.transaction(['scans'], 'readonly');
+      const store = transaction.objectStore('scans');
+      const request = store.getAll();
+      
+      await new Promise((resolve) => {
+        request.onsuccess = function() {
+          scans = request.result;
+          resolve();
+        };
+      });
+    } else {
+      scans = JSON.parse(localStorage.getItem('scans') || '[]');
+    }
+    
+    if (scans.length === 0) {
+      showMessage('업로드할 데이터 없음', 'error');
       return;
     }
     
-    showMessage('업로드 중...', 'info');
+    let success = 0;
+    let fail = 0;
     
-    const transaction = db.transaction(['scans'], 'readonly');
-    const store = transaction.objectStore('scans');
-    const request = store.getAll();
-    
-    request.onsuccess = async function() {
-      const scans = request.result;
+    for (let i = 0; i < scans.length; i++) {
+      const scan = scans[i];
       
-      if (scans.length === 0) {
-        showMessage('업로드할 데이터 없음', 'error');
-        return;
-      }
-      
-      let success = 0;
-      let fail = 0;
-      
-      for (let i = 0; i < scans.length; i++) {
-        const scan = scans[i];
+      try {
+        const res = await fetch('https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(scan.qr) + '&sessionId=' + encodeURIComponent(scan.sessionId));
+        const result = await res.json();
         
-        try {
-          const res = await fetch('https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(scan.qr) + '&sessionId=' + encodeURIComponent(scan.sessionId));
-          const result = await res.json();
-          
-          if (result.success) {
-            success++;
-            deleteFromDB(scan.id);
-          } else {
-            fail++;
-          }
-        } catch (e) {
-          console.error('업로드 오류:', e);
+        if (result.success) {
+          success++;
+          deleteFromDB(scan.id || i);
+        } else {
           fail++;
         }
+      } catch (e) {
+        console.error('업로드 오류:', e);
+        fail++;
       }
-      
-      showMessage('업로드 완료: 성공 ' + success + '개, 실패 ' + fail + '개', 'success');
-      updateLocalCount();
-    };
+    }
+    
+    showMessage('업로드 완료: 성공 ' + success + '개, 실패 ' + fail + '개', 'success');
+    updateLocalCount();
   }
 
   function deleteFromDB(id) {
-    const transaction = db.transaction(['scans'], 'readwrite');
-    const store = transaction.objectStore('scans');
-    store.delete(id);
+    if (useIndexedDB && db) {
+      const transaction = db.transaction(['scans'], 'readwrite');
+      const store = transaction.objectStore('scans');
+      store.delete(id);
+    }
   }
 
   function clearData() {
@@ -927,26 +990,32 @@
   }
 
   function clearLocalData() {
-    const transaction = db.transaction(['scans'], 'readwrite');
-    const store = transaction.objectStore('scans');
-    store.clear();
-    
-    transaction.oncomplete = function() {
+    if (useIndexedDB && db) {
+      const transaction = db.transaction(['scans'], 'readwrite');
+      const store = transaction.objectStore('scans');
+      store.clear();
+      
+      transaction.oncomplete = function() {
+        updateLocalCount();
+      };
+    } else {
+      localStorage.removeItem('scans');
       updateLocalCount();
-    };
+    }
   }
 
   // ================================================
-  // 페이스 모달 표시 함수
+  // 페이스 모달 표시
   // ================================================
   function showPaceModal(accumulated, pace) {
     if (!pace) {
-      console.log('페이스 데이터 없음');
+      console.log('❌ 페이스 데이터 없음');
       return;
     }
     
+    console.log('📊 페이스 모달 표시:', pace);
+    
     const modal = document.getElementById('paceModal');
-    const modalStudentName = document.getElementById('modalStudentName');
     const modalCurrentPace = document.getElementById('modalCurrentPace');
     const targetsContainer = document.getElementById('paceTargetsContainer');
     
@@ -983,10 +1052,12 @@
     modal.classList.remove('show');
   }
 
+  // ================================================
+  // 초기화
+  // ================================================
   console.log('🚀 페이지 로드 완료');
-  console.log('jsQR 버전: https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js');
-  
   document.getElementById('debugInfo').classList.add('show');
+  initializeStorage();
 </script>
 
 </body>
