@@ -2,54 +2,94 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <title>러닝 기록 시스템</title>
   <script src="https://unpkg.com/jsqr@1.4.0/dist/jsQR.js"></script>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { 
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
     body { 
       font-family: 'Noto Sans KR', sans-serif; 
       background: #f5f5f5; 
-      padding: 20px; 
+      padding: 0;
+      -webkit-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
     .container { 
-      max-width: 600px; 
+      max-width: 100%;
+      max-height: 100vh;
       margin: 0 auto; 
       background: white; 
-      border-radius: 10px; 
-      padding: 20px; 
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1); 
+      padding: 15px;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
     h1 { 
       color: #4285F4; 
       text-align: center; 
-      margin-bottom: 15px; 
-      font-size: 28px;
+      margin-bottom: 12px; 
+      font-size: 24px;
     }
     .session-header {
       display: flex;
       align-items: center;
-      gap: 10px;
-      margin-bottom: 15px;
+      gap: 8px;
+      margin-bottom: 12px;
       justify-content: center;
+      flex-wrap: wrap;
     }
     .session-info {
       background: #f0f7ff;
       border: 2px solid #4285F4;
-      padding: 10px 15px;
+      padding: 8px 12px;
       border-radius: 8px;
-      font-size: 12px;
+      font-size: 11px;
       color: #4285F4;
     }
     .session-info strong {
-      font-size: 14px;
+      font-size: 12px;
+    }
+    .mode-badge {
+      background: #e8f5e9;
+      border: 2px solid #4caf50;
+      padding: 6px 10px;
+      border-radius: 8px;
+      font-size: 11px;
+      color: #2e7d32;
+      font-weight: bold;
+    }
+    .mode-badge.max-distance {
+      background: #fff3e0;
+      border-color: #ff9800;
+      color: #e65100;
+    }
+    .network-status {
+      font-size: 10px;
+      padding: 4px 8px;
+      border-radius: 5px;
+      display: inline-block;
+    }
+    .network-status.online {
+      background: #d4edda;
+      color: #155724;
+    }
+    .network-status.offline {
+      background: #f8d7da;
+      color: #721c24;
     }
     button.new-session-header {
       background: #ff9800;
       color: white;
       border: none;
-      padding: 10px 15px;
-      font-size: 12px;
+      padding: 8px 12px;
+      font-size: 11px;
       border-radius: 5px;
       cursor: pointer;
       transition: background 0.3s;
@@ -58,18 +98,15 @@
     button.new-session-header:hover {
       background: #e68900;
     }
-    button.new-session-header:disabled {
-      background: #ccc;
-      cursor: not-allowed;
-    }
     .camera-section {
       position: relative;
-      margin-bottom: 20px;
+      margin-bottom: 15px;
       background: #000;
       border: 2px solid #4285F4;
       border-radius: 8px;
       overflow: hidden;
       aspect-ratio: 4/3;
+      width: 100%;
     }
     #video { 
       width: 100%;
@@ -77,304 +114,272 @@
       display: none;
       background: #000;
       object-fit: cover;
+      -webkit-transform: translate3d(0, 0, 0);
     }
     #canvas { display: none; }
     .camera-controls {
       display: flex;
-      gap: 10px;
-      margin-bottom: 15px;
+      gap: 8px;
+      margin-bottom: 12px;
       align-items: center;
     }
     select {
       flex: 1;
-      padding: 10px;
+      padding: 8px;
       border: 1px solid #ddd;
       border-radius: 5px;
-      font-size: 14px;
+      font-size: 13px;
       background: white;
       color: #333;
-    }
-    select:focus {
-      outline: none;
-      border-color: #4285F4;
-      box-shadow: 0 0 5px rgba(66, 133, 244, 0.3);
     }
     button { 
       background: #4285F4; 
       color: white;
       border: none; 
-      padding: 10px 20px; 
-      font-size: 14px; 
+      padding: 8px 16px; 
+      font-size: 13px; 
       border-radius: 5px; 
       cursor: pointer; 
       transition: background 0.3s;
       flex: 1;
+      -webkit-user-select: none;
+      user-select: none;
     }
-    button:hover { 
-      background: #357ae8; 
-    }
-    button:disabled { 
-      background: #ccc; 
-      cursor: not-allowed; 
-    }
+    button:hover { background: #357ae8; }
+    button:active { background: #2e5cc8; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
     .button-group {
       display: flex;
-      gap: 10px;
-      margin-bottom: 20px;
+      gap: 8px;
+      margin-bottom: 15px;
     }
-    .message { 
-      padding: 10px; 
-      margin: 10px 0; 
-      border-radius: 5px; 
-      display: none; 
+
+    /* 통계 카드 (메인) */
+    .stats {
+      background: linear-gradient(135deg, #f0f7ff 0%, #e3f2fd 100%);
+      border: 3px solid #4285F4;
+      padding: 20px;
+      border-radius: 12px;
+      margin: 12px 0;
+      text-align: center;
+      min-height: 120px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
     }
-    .message.show { display: block; }
-    .success { 
-      background: #d4edda; 
-      border: 1px solid #28a745; 
-      color: #155724;
+    .stats.running-start {
+      background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+      border-color: #28a745;
     }
-    .error { 
-      background: #f8d7da; 
-      border: 1px solid #f5c6cb; 
-      color: #721c24;
+    .stats.running-end {
+      background: linear-gradient(135deg, #fff3cd 0%, #ffeaa7 100%);
+      border-color: #ffc107;
     }
-    .info { 
-      background: #d1ecf1; 
-      border: 1px solid #bee5eb; 
-      color: #0c5460;
+    .stats-icon {
+      font-size: 32px;
+      margin-bottom: 8px;
     }
-    .stats { 
-      background: #f0f7ff;
-      border: 2px solid #4285F4;
-      padding: 15px; 
-      border-radius: 8px; 
-      margin: 15px 0; 
-      text-align: center; 
-    }
-    .stats h3 {
+    .stats-title {
+      font-size: 20px;
+      font-weight: bold;
       color: #4285F4;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
-    .stats p { 
-      margin: 10px 0; 
-      font-size: 16px; 
+    .stats-title.running-start {
+      color: #28a745;
     }
-    .stats strong { 
-      color: #34A853; 
+    .stats-title.running-end {
+      color: #ff9800;
     }
+    .stats-info {
+      font-size: 14px;
+      color: #333;
+      line-height: 1.8;
+    }
+    .stats-info strong {
+      color: #34A853;
+      font-size: 16px;
+    }
+    .stats-empty {
+      color: #999;
+      font-size: 13px;
+    }
+
     .section {
       background: #f9f9f9;
       border: 0.5px solid #e0e0e0;
-      padding: 15px;
+      padding: 12px;
       border-radius: 8px;
       margin: 10px 0;
     }
     .section h3 {
       color: #4285F4;
-      margin-bottom: 10px;
-      font-size: 16px;
-    }
-    .section p {
+      margin-bottom: 8px;
       font-size: 14px;
-      color: #666;
-      margin-bottom: 10px;
-    }
-    .data-count {
-      font-size: 16px;
       font-weight: bold;
-      color: #4285F4;
-      margin: 10px 0;
+    }
+    .offline-data-count {
+      background: #fff3e0;
+      border: 1px solid #ff9800;
       padding: 10px;
-      background: #f0f7ff;
       border-radius: 5px;
-    }
-    .scan-list {
-      max-height: 300px;
-      overflow-y: auto;
-      margin: 10px 0;
-      border: 1px solid #e0e0e0;
-      border-radius: 5px;
-      background: #fafafa;
-    }
-    .scan-item {
-      padding: 12px;
-      border-bottom: 1px solid #e0e0e0;
+      margin-bottom: 10px;
       font-size: 13px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      gap: 10px;
+      color: #e65100;
     }
-    .scan-item:last-child {
-      border-bottom: none;
-    }
-    .scan-info {
-      flex: 1;
-    }
-    .scan-info p {
-      margin: 3px 0;
-      color: #333;
-    }
-    .scan-qr {
-      color: #4285F4;
-      font-weight: bold;
-      font-size: 12px;
-    }
-    .scan-name {
-      color: #666;
-      font-size: 12px;
-    }
-    .scan-time {
-      color: #999;
-      font-size: 11px;
-    }
-    .scan-delete {
-      background: #ff1744;
-      color: white;
-      border: none;
-      padding: 5px 10px;
-      border-radius: 3px;
-      cursor: pointer;
-      font-size: 12px;
-      flex-shrink: 0;
-    }
-    .scan-delete:hover {
-      background: #da190b;
+    .offline-data-count strong {
+      font-size: 16px;
+      color: #ff9800;
     }
     button.upload {
-      background: #34A853;
+      background: #4caf50;
       width: 100%;
-      margin-top: 10px;
+      margin-bottom: 8px;
+      font-weight: bold;
     }
     button.upload:hover {
-      background: #2d8e47;
+      background: #388e3c;
     }
     button.delete {
       background: #f44336;
       width: 100%;
-      margin-top: 5px;
+      font-weight: bold;
     }
     button.delete:hover {
       background: #da190b;
     }
-    .pace-modal {
+    button.batch-end {
+      background: #f44336;
+      width: 100%;
+      margin-top: 8px;
+      font-weight: bold;
+      font-size: 14px;
+    }
+    button.batch-end:hover {
+      background: #da190b;
+    }
+    .modal {
       display: none;
       position: fixed;
       top: 0;
       left: 0;
       width: 100%;
       height: 100%;
-      background: rgba(0, 0, 0, 0.6);
-      z-index: 1000;
+      background: rgba(0, 0, 0, 0.7);
+      z-index: 2000;
       align-items: center;
       justify-content: center;
+      padding: 20px;
     }
-    .pace-modal.show {
+    .modal.show {
       display: flex;
     }
-    .pace-modal-content {
+    .modal-content {
       background: white;
       border-radius: 15px;
       padding: 25px;
       max-width: 500px;
-      width: 90%;
+      width: 100%;
       box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
       animation: slideUp 0.3s ease-out;
+      max-height: 90vh;
+      overflow-y: auto;
+      -webkit-overflow-scrolling: touch;
     }
     @keyframes slideUp {
-      from {
-        transform: translateY(30px);
-        opacity: 0;
-      }
-      to {
-        transform: translateY(0);
-        opacity: 1;
-      }
+      from { transform: translateY(30px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
     }
-    .pace-modal-header {
+    .modal-header {
       text-align: center;
       margin-bottom: 20px;
       border-bottom: 3px solid #4285F4;
-      padding-bottom: 15px;
+      padding-bottom: 12px;
     }
-    .pace-modal-header h2 {
+    .modal-header h2 {
       color: #4285F4;
-      font-size: 24px;
-      margin-bottom: 5px;
+      font-size: 20px;
+      margin-bottom: 4px;
     }
-    .pace-current {
-      background: #f0f7ff;
+    .mode-buttons {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 15px;
+    }
+    .mode-btn {
       padding: 15px;
-      border-radius: 8px;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      background: white;
+      cursor: pointer;
+      transition: all 0.3s;
       text-align: center;
-      margin-bottom: 20px;
-      border-left: 4px solid #4285F4;
-    }
-    .pace-current p {
-      color: #666;
       font-size: 12px;
-      margin-bottom: 5px;
     }
-    .pace-current .time {
-      font-size: 36px;
+    .mode-btn:active {
+      border-color: #4285F4;
+      background: #f0f7ff;
+    }
+    .mode-btn.selected {
+      border-color: #4285F4;
+      background: #f0f7ff;
+    }
+    .mode-btn .emoji {
+      font-size: 28px;
+      margin-bottom: 8px;
+    }
+    .input-group {
+      margin: 12px 0;
+    }
+    .input-group label {
+      display: block;
+      margin-bottom: 6px;
+      color: #333;
       font-weight: bold;
-      color: #4285F4;
-      font-family: 'Courier New', monospace;
+      font-size: 13px;
     }
-    .pace-targets {
-      margin: 20px 0;
-    }
-    .pace-target-item {
-      background: #fafafa;
-      border-left: 4px solid #34A853;
-      padding: 15px;
-      margin-bottom: 12px;
+    .input-group input {
+      width: 100%;
+      padding: 10px;
+      border: 2px solid #ddd;
       border-radius: 5px;
-    }
-    .pace-target-item strong {
-      color: #34A853;
       font-size: 14px;
     }
-    .pace-target-item p {
-      margin: 8px 0;
-      color: #333;
-      font-size: 13px;
-      line-height: 1.5;
+    .input-group input:focus {
+      outline: none;
+      border-color: #4285F4;
     }
-    .pace-close-hint {
-      text-align: center;
-      color: #999;
-      font-size: 11px;
-      margin-top: 15px;
-      padding-top: 15px;
-      border-top: 1px solid #e0e0e0;
+    .modal-buttons {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
     }
-    .debug-info {
-      background: #fff3cd;
-      border: 1px solid #ffc107;
-      color: #856404;
+    .modal-buttons button {
+      flex: 1;
       padding: 10px;
-      border-radius: 5px;
-      font-size: 12px;
-      margin-top: 10px;
-      display: none;
     }
-    .debug-info.show {
-      display: block;
+    .modal-buttons button.cancel {
+      background: #999;
+    }
+    .modal-buttons button.cancel:hover {
+      background: #777;
     }
   </style>
 </head>
 <body>
 
 <div class="container">
-  <h1>러닝 기록 시스템</h1>
+  <h1>🏃 러닝 기록</h1>
   
   <div class="session-header">
     <div class="session-info">
-      <strong>현재 세션: <span id="sessionDisplay">준비중...</span></strong>
+      <strong>세션: <span id="sessionDisplay">준비중</span></strong>
     </div>
-    <button class="new-session-header" id="newSessionBtn" onclick="startNewSession()">🔄 새 시작</button>
+    <div class="mode-badge" id="modeBadge">준비중</div>
+    <div class="network-status online" id="networkStatus">🟢 온라인</div>
+    <button class="new-session-header" onclick="startNewSession()">🔄 새 시작</button>
   </div>
   
   <div class="camera-section">
@@ -390,61 +395,58 @@
   </div>
   
   <div class="button-group">
-    <button id="startBtn" onclick="startCamera()">카메라 시작</button>
-    <button id="stopBtn" onclick="stopCamera()" disabled>카메라 중지</button>
+    <button id="startBtn" onclick="startCamera()">시작</button>
+    <button id="stopBtn" onclick="stopCamera()" disabled>중지</button>
   </div>
-  
-  <div id="message" class="message"></div>
-  
+
+  <!-- 통계 카드 (메인) -->
   <div id="stats" class="stats" style="display:none;">
-    <h3>현재 통계</h3>
-    <p>누적 스캔: <strong id="scanCount">0</strong></p>
-    <p id="lastStudent" style="display:none;">마지막 학생: <strong id="lastName">-</strong></p>
+    <div class="stats-icon" id="statsIcon">📍</div>
+    <div class="stats-title" id="statsTitle">기다중...</div>
+    <div class="stats-info" id="statsInfo"></div>
   </div>
   
   <div class="section">
     <h3>오프라인 데이터 관리</h3>
-    <div class="data-count">저장됨: <span id="localCount">0</span>개</div>
-    
-    <div class="scan-list" id="scanList" style="display:none;">
-      <!-- 스캔 항목들이 여기 표시됨 -->
-    </div>
-    
-    <button class="upload" onclick="uploadData()">데이터 업로드</button>
-    <button class="delete" onclick="clearData()">로컬 데이터 전부 삭제</button>
+    <div class="offline-data-count">저장됨: <strong id="offlineCount">0</strong>개</div>
+    <button class="upload" onclick="uploadData()">📤 데이터 업로드</button>
+    <button class="delete" onclick="clearData()">🗑️ 로컬 데이터 전부 삭제</button>
   </div>
 
-  <div id="debugInfo" class="debug-info">
-    <strong>디버그 정보:</strong><br>
-    jsQR 라이브러리: <span id="jsqrStatus">확인중...</span><br>
-    저장소: <span id="storageStatus">확인중...</span><br>
-    비디오 상태: <span id="videoStatus">대기중</span><br>
-    스캔 상태: <span id="scanStatus">정지</span><br>
-    세션ID: <span id="sessionId">준비중...</span>
+  <div class="section">
+    <button class="batch-end" id="batchEndBtn" onclick="batchEndSession()" style="display:none;">🛑 일괄 종료</button>
   </div>
 </div>
 
-<!-- 페이스 정보 모달 -->
-<div id="paceModal" class="pace-modal">
-  <div class="pace-modal-content">
-    <div class="pace-modal-header">
-      <h2>📊 페이스 정보</h2>
-      <p id="modalStudentName">학생명</p>
+<!-- 모드 선택 모달 -->
+<div id="modeModal" class="modal">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>운동 모드</h2>
+      <p style="font-size: 12px;">모드를 선택하세요</p>
     </div>
     
-    <div class="pace-current">
-      <p>현재 페이스</p>
-      <div class="time" id="modalCurrentPace">-:--</div>
-    </div>
-    
-    <div class="pace-targets">
-      <div id="paceTargetsContainer">
-        <!-- 목표 페이스가 여기 표시됨 -->
+    <div class="mode-buttons">
+      <div class="mode-btn" id="maxDistanceBtn" onclick="selectMode('maxDistance')">
+        <div class="emoji">📏</div>
+        <strong>최대거리</strong>
+        <p style="font-size: 11px; color: #666; margin-top: 8px;">목표 거리<br>자동 종료</p>
+      </div>
+      <div class="mode-btn" id="freeBtn" onclick="selectMode('free')">
+        <div class="emoji">🆓</div>
+        <strong>자율</strong>
+        <p style="font-size: 11px; color: #666; margin-top: 8px;">거리 제한<br>없음</p>
       </div>
     </div>
     
-    <div class="pace-close-hint">
-      화면을 터치하거나 2초 후 자동으로 닫힙니다
+    <div id="distanceInputGroup" class="input-group" style="display:none;">
+      <label for="maxDistanceInput">목표 거리 (km):</label>
+      <input type="number" id="maxDistanceInput" placeholder="예: 10" min="1" step="0.5">
+    </div>
+    
+    <div class="modal-buttons">
+      <button onclick="cancelModeSelect()" class="cancel">취소</button>
+      <button id="confirmModeBtn" onclick="confirmMode()" disabled>확인</button>
     </div>
   </div>
 </div>
@@ -454,144 +456,298 @@
   let canvas = document.getElementById('canvas');
   let canvasContext = canvas.getContext('2d');
   let scanning = false;
-  let db = null;
   let cameraStarted = false;
   let frameCount = 0;
   let lastQRData = null;
   let qrCooldown = false;
+  let scanLoopInterval = null;
   
-  // 저장소 타입 관리
-  let useIndexedDB = true;
+  // 세션 설정
   let currentSessionId = null;
+  let sessionMode = null;
+  let maxDistance = null;
+  let endedStudents = {};
   
-  // jsQR 라이브러리 로드 확인
-  setTimeout(() => {
-    if (typeof jsQR === 'function') {
-      console.log('✅ jsQR 라이브러리 로드 성공');
-      document.getElementById('jsqrStatus').textContent = '✅ 로드됨';
-    } else {
-      console.error('❌ jsQR 라이브러리 로드 실패');
-      document.getElementById('jsqrStatus').textContent = '❌ 로드 실패';
-    }
-  }, 500);
-  
-  // ================================================
-  // IndexedDB 또는 localStorage 초기화
-  // ================================================
-  function initializeStorage() {
-    if (!window.indexedDB) {
-      console.warn('IndexedDB 미지원, localStorage 사용');
-      useIndexedDB = false;
-      document.getElementById('storageStatus').textContent = '📦 localStorage';
-      initializeSession();
-      return;
-    }
+  // 네트워크
+  let isOnline = navigator.onLine;
 
-    const dbRequest = indexedDB.open('LapCountingDB', 1);
-    
-    dbRequest.onerror = function() { 
-      console.error('❌ IndexedDB 접근 불가 (Tracking Prevention), localStorage 사용');
-      useIndexedDB = false;
-      document.getElementById('storageStatus').textContent = '📦 localStorage';
-      initializeSession();
-    };
-    
-    dbRequest.onupgradeneeded = function(e) {
-      db = e.target.result;
-      if (!db.objectStoreNames.contains('scans')) {
-        db.createObjectStore('scans', { keyPath: 'id', autoIncrement: true });
-      }
-    };
-    
-    dbRequest.onsuccess = function(e) {
-      db = e.target.result;
-      useIndexedDB = true;
-      console.log('✅ IndexedDB 준비 완료');
-      document.getElementById('storageStatus').textContent = '✅ IndexedDB';
-      initializeSession();
-    };
+  // ================================================
+  // 네트워크 상태
+  // ================================================
+  window.addEventListener('online', () => {
+    isOnline = true;
+    updateNetworkStatus();
+  });
+
+  window.addEventListener('offline', () => {
+    isOnline = false;
+    updateNetworkStatus();
+  });
+
+  function updateNetworkStatus() {
+    const status = document.getElementById('networkStatus');
+    if (isOnline) {
+      status.className = 'network-status online';
+      status.textContent = '🟢 온라인';
+    } else {
+      status.className = 'network-status offline';
+      status.textContent = '⚠️ 오프라인';
+    }
   }
 
   // ================================================
-  // 세션 초기화
+  // 통신 (재시도 로직)
   // ================================================
-  function initializeSession() {
-    currentSessionId = localStorage.getItem('currentSessionId');
+  async function fetchWithRetry(url, retries = 3) {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
+        
+        const response = await fetch(url, {
+          method: 'GET',
+          signal: controller.signal,
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return data;
+        
+      } catch (error) {
+        if (i === retries - 1) {
+          throw error;
+        }
+        await new Promise(resolve => setTimeout(resolve, (i + 1) * 1000));
+      }
+    }
+  }
+
+  // ================================================
+  // 로컬 데이터 관리
+  // ================================================
+  function saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime) {
+    const key = `localStats_${qrText}`;
     
-    if (!currentSessionId) {
-      generateNewSessionId();
+    localStorage.setItem(key, JSON.stringify({
+      qrText: qrText,
+      scanCount: scanCount,
+      distance: distance,
+      totalTime: totalTime,
+      studentName: studentName,
+      firstScanTime: firstScanTime,
+      lastScanTime: lastScanTime,
+      sessionId: currentSessionId
+    }));
+  }
+
+  function getLocalStats(qrText) {
+    const key = `localStats_${qrText}`;
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : null;
+  }
+
+  function getAllLocalStats() {
+    const stats = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key.startsWith('localStats_')) {
+        const data = JSON.parse(localStorage.getItem(key));
+        stats.push(data);
+      }
+    }
+    return stats;
+  }
+
+  function updateOfflineCount() {
+    const stats = getAllLocalStats();
+    document.getElementById('offlineCount').textContent = stats.length;
+  }
+
+  // ================================================
+  // 통계 표시 (메인)
+  // ================================================
+  function displayStats(studentData, scanCount, distance, totalTime, isEnded = false) {
+    const statsDiv = document.getElementById('stats');
+    const icon = document.getElementById('statsIcon');
+    const title = document.getElementById('statsTitle');
+    const info = document.getElementById('statsInfo');
+
+    statsDiv.style.display = 'flex';
+    statsDiv.classList.remove('running-start', 'running-end');
+
+    if (scanCount === 1) {
+      // 첫 번째 스캔
+      icon.textContent = '🏃';
+      title.textContent = '러닝 시작!';
+      title.classList.add('running-start');
+      statsDiv.classList.add('running-start');
+      info.innerHTML = '';
+    } else if (isEnded) {
+      // 거리제한 도달 (마지막)
+      icon.textContent = '🏁';
+      title.textContent = '러닝 종료!';
+      title.classList.add('running-end');
+      statsDiv.classList.add('running-end');
+      info.innerHTML = `
+        <div style="font-size: 13px;">
+          <div style="margin-bottom: 8px;"><strong>${studentData.name}</strong></div>
+          <div>⏱️ ${totalTime}</div>
+          <div>거리: ${distance.toFixed(1)}km</div>
+        </div>
+      `;
+    } else {
+      // 두 번째 이상
+      icon.textContent = '📍';
+      title.textContent = `${String(studentData.studentNum).padStart(3, '0')}번 학생`;
+      title.classList.remove('running-start', 'running-end');
+      statsDiv.classList.remove('running-start', 'running-end');
+      info.innerHTML = `
+        <div>
+          <div>⏱️ ${totalTime}</div>
+          <div>거리: <strong>${distance.toFixed(1)}km</strong></div>
+          <div>라운드: <strong>${scanCount}</strong></div>
+        </div>
+      `;
+    }
+  }
+
+  function clearStatsDisplay() {
+    document.getElementById('stats').style.display = 'none';
+  }
+
+  // ================================================
+  // 초기화
+  // ================================================
+  function init() {
+    updateNetworkStatus();
+    updateOfflineCount();
+    
+    currentSessionId = localStorage.getItem('currentSessionId');
+    sessionMode = localStorage.getItem('sessionMode');
+    maxDistance = localStorage.getItem('maxDistance');
+    
+    if (!currentSessionId || !sessionMode) {
+      showModeModal();
     } else {
       displaySessionInfo();
+      updateModeBadge();
     }
-    
-    updateLocalCount();
   }
 
   // ================================================
-  // 새로운 세션 시작
+  // 모드 선택
   // ================================================
-  function startNewSession() {
-    if (cameraStarted) {
-      showMessage('⚠️ 카메라가 실행 중입니다. 먼저 중지해주세요.', 'error');
+  let selectedMode = null;
+
+  function showModeModal() {
+    document.getElementById('modeModal').classList.add('show');
+  }
+
+  function selectMode(mode) {
+    selectedMode = mode;
+    
+    document.getElementById('maxDistanceBtn').classList.remove('selected');
+    document.getElementById('freeBtn').classList.remove('selected');
+    
+    if (mode === 'maxDistance') {
+      document.getElementById('maxDistanceBtn').classList.add('selected');
+      document.getElementById('distanceInputGroup').style.display = 'block';
+    } else {
+      document.getElementById('freeBtn').classList.add('selected');
+      document.getElementById('distanceInputGroup').style.display = 'none';
+    }
+    document.getElementById('confirmModeBtn').disabled = false;
+  }
+
+  function confirmMode() {
+    if (!selectedMode) {
+      alert('모드를 선택하세요');
       return;
     }
     
-    if (confirm('현재 로컬 데이터를 업로드한 후 새로운 러닝을 시작하시겠습니까?')) {
-      uploadData();
-      
-      setTimeout(() => {
-        generateNewSessionId();
-        clearLocalData();
-        document.getElementById('scanCount').textContent = '0';
-        document.getElementById('stats').style.display = 'none';
-        showMessage('🏃 새로운 러닝을 시작했습니다!', 'success');
-      }, 1500);
+    if (selectedMode === 'maxDistance') {
+      const distance = parseFloat(document.getElementById('maxDistanceInput').value);
+      if (!distance || distance <= 0) {
+        alert('거리를 입력하세요');
+        return;
+      }
+      maxDistance = distance;
+      localStorage.setItem('maxDistance', maxDistance);
+    }
+    
+    generateNewSessionId();
+    sessionMode = selectedMode;
+    localStorage.setItem('sessionMode', sessionMode);
+    
+    document.getElementById('modeModal').classList.remove('show');
+    displaySessionInfo();
+    updateModeBadge();
+  }
+
+  function cancelModeSelect() {
+    if (confirm('취소하시겠습니까?')) {
+      document.getElementById('modeModal').classList.remove('show');
     }
   }
 
-  // ================================================
-  // 새 세션ID 생성
-  // ================================================
   function generateNewSessionId() {
-    const now = new Date();
-    const timestamp = now.getTime();
-    
-    currentSessionId = 'SESSION_' + timestamp;
+    currentSessionId = 'SESSION_' + Date.now();
     localStorage.setItem('currentSessionId', currentSessionId);
-    displaySessionInfo();
+    endedStudents = {};
   }
 
-  // ================================================
-  // 세션 정보 표시
-  // ================================================
   function displaySessionInfo() {
     const dateObj = new Date(parseInt(currentSessionId.split('_')[1]));
-    const dateStr = dateObj.toLocaleString('ko-KR', {
-      month: '2-digit',
-      day: '2-digit',
+    const timeStr = dateObj.toLocaleTimeString('ko-KR', {
       hour: '2-digit',
       minute: '2-digit'
     });
+    document.getElementById('sessionDisplay').textContent = timeStr;
+  }
+
+  function updateModeBadge() {
+    const badge = document.getElementById('modeBadge');
+    if (sessionMode === 'maxDistance') {
+      badge.className = 'mode-badge max-distance';
+      badge.textContent = `📏 ${maxDistance}km`;
+      document.getElementById('batchEndBtn').style.display = 'none';
+    } else {
+      badge.className = 'mode-badge';
+      badge.textContent = '🆓 자율';
+      document.getElementById('batchEndBtn').style.display = 'block';
+    }
+  }
+
+  function startNewSession() {
+    if (cameraStarted) {
+      alert('카메라 중지 후 진행');
+      return;
+    }
     
-    document.getElementById('sessionDisplay').textContent = dateStr;
-    document.getElementById('sessionId').textContent = currentSessionId;
-    console.log('✅ 현재 세션ID:', currentSessionId);
+    if (confirm('새로 시작?')) {
+      localStorage.clear();
+      location.reload();
+    }
   }
 
   // ================================================
-  // 카메라 시작
+  // 카메라
   // ================================================
   async function startCamera() {
-    if (cameraStarted) return;
+    if (cameraStarted || !sessionMode) return;
+    
     cameraStarted = true;
-    frameCount = 0;
     
     try {
-      console.log('📷 카메라 요청 중...');
-      document.getElementById('videoStatus').textContent = '요청중...';
-      
       const facingMode = document.getElementById('cameraSelect').value;
-      
       const constraints = {
         video: { 
           facingMode: facingMode,
@@ -602,462 +758,307 @@
       };
       
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
-      console.log('✅ 카메라 스트림 획득 성공');
-      
       video.srcObject = stream;
       video.style.display = 'block';
       
-      await video.play().catch(e => console.error('비디오 재생 오류:', e));
-      console.log('✅ 비디오 재생 시작');
+      await video.play();
       
-      document.getElementById('videoStatus').textContent = '🟢 실행중';
       document.getElementById('startBtn').disabled = true;
       document.getElementById('stopBtn').disabled = false;
       document.getElementById('cameraSelect').disabled = true;
       scanning = true;
-      document.getElementById('scanStatus').textContent = '🟢 스캔중';
       
-      setTimeout(scan, 200);
+      startScanLoop();
       
     } catch (error) {
-      console.error('❌ 카메라 오류:', error.name, error.message);
-      document.getElementById('videoStatus').textContent = '❌ 오류: ' + error.message;
-      showMessage('카메라 오류: ' + error.message, 'error');
+      alert('카메라 오류');
       cameraStarted = false;
       document.getElementById('startBtn').disabled = false;
     }
   }
 
   function stopCamera() {
-    console.log('⏹️ 카메라 중지');
     const stream = video.srcObject;
     if (stream) {
-      stream.getTracks().forEach(function(track) { 
-        track.stop(); 
-      });
+      stream.getTracks().forEach(track => track.stop());
     }
     video.style.display = 'none';
     scanning = false;
     cameraStarted = false;
-    document.getElementById('videoStatus').textContent = '⏸️ 중지됨';
-    document.getElementById('scanStatus').textContent = '⏸️ 정지';
+    
+    if (scanLoopInterval) {
+      clearInterval(scanLoopInterval);
+      scanLoopInterval = null;
+    }
+    
     document.getElementById('startBtn').disabled = false;
     document.getElementById('stopBtn').disabled = true;
     document.getElementById('cameraSelect').disabled = false;
   }
 
-  function scan() {
-    if (!scanning) return;
+  // ================================================
+  // 스캔 루프
+  // ================================================
+  function startScanLoop() {
+    if (scanLoopInterval) clearInterval(scanLoopInterval);
     
-    try {
-      frameCount++;
+    scanLoopInterval = setInterval(() => {
+      if (!scanning) return;
       
-      if (video.readyState === video.HAVE_ENOUGH_DATA) {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
+      try {
+        frameCount++;
         
-        if (canvas.width === 0 || canvas.height === 0) {
-          console.warn('비디오 크기 오류');
-          requestAnimationFrame(scan);
-          return;
-        }
-        
-        canvasContext.drawImage(video, 0, 0);
-        const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
-        
-        if (typeof jsQR === 'function') {
-          const code = jsQR(imageData.data, canvas.width, canvas.height);
+        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
           
-          if (frameCount % 30 === 0) {
-            console.log('프레임', frameCount, ':', code ? '✅ QR 감지됨: ' + code.data : '❌ QR 미감지');
-          }
+          if (canvas.width === 0 || canvas.height === 0) return;
           
-          if (code && !qrCooldown) {
-            if (lastQRData === code.data) {
-              console.log('⚠️ 같은 QR 연속 감지, 무시됨');
-              requestAnimationFrame(scan);
-              return;
+          canvasContext.drawImage(video, 0, 0);
+          const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
+          
+          if (typeof jsQR === 'function') {
+            const code = jsQR(imageData.data, canvas.width, canvas.height);
+            
+            if (code && !qrCooldown) {
+              if (lastQRData === code.data) {
+                return;
+              }
+              
+              lastQRData = code.data;
+              qrCooldown = true;
+              
+              handleQRData(code.data);
             }
-            
-            console.log('✅ QR 코드 감지:', code.data);
-            lastQRData = code.data;
-            qrCooldown = true;
-            
-            handleQRData(code.data);
-            return;
           }
-        } else {
-          console.error('jsQR 함수를 찾을 수 없음');
         }
+      } catch (e) {
+        console.error('스캔 오류:', e);
       }
-    } catch (e) {
-      console.error('QR 스캔 오류:', e);
-    }
-    
-    requestAnimationFrame(scan);
+    }, 50);
   }
 
+  // ================================================
+  // QR 처리
+  // ================================================
   async function handleQRData(qrText) {
     scanning = false;
-    document.getElementById('scanStatus').textContent = '⏸️ 처리중';
     
-    try {
-      console.log('📤 QR 데이터 처리:', qrText);
-      console.log('🔑 세션ID:', currentSessionId);
-      showMessage('처리 중...', 'info');
-      
-      const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText) + '&sessionId=' + encodeURIComponent(currentSessionId);
-      
-      console.log('📍 요청 URL:', appScriptUrl);
-      
-      const response = await fetch(appScriptUrl);
-      const result = await response.json();
-      console.log('✅ Apps Script 응답:', result);
-      console.log('📊 누적 데이터:', result.data?.accumulated);
-      
-      if (result.success) {
-        saveToLocal(qrText, result.data.student);
-        updateDisplay(result.data.student);
+    // 이미 종료된 학생
+    if (endedStudents[qrText]) {
+      alert('이미 종료된 학생입니다');
+      resumeScanning();
+      return;
+    }
+
+    // 온라인 시도
+    if (isOnline) {
+      try {
+        const appScriptUrl = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(qrText) + '&sessionId=' + encodeURIComponent(currentSessionId);
         
-        const scanCount = result.data.accumulated.scanCount;
-        console.log('🔢 scanCount:', scanCount);
+        const result = await fetchWithRetry(appScriptUrl, 3);
         
-        if (scanCount === 1) {
-          console.log('1️⃣ 첫 스캔 - "러닝 시작!" 표시');
-          showMessage('🏃 러닝 시작!', 'success');
-        } else {
-          console.log('2️⃣ 다중 스캔 - 페이스 모달 표시');
-          showMessage('성공: ' + result.message, 'success');
-          showPaceModal(result.data.accumulated, result.data.pace);
+        if (result.success) {
+          const scanCount = result.data.accumulated.scanCount;
+          const distance = result.data.accumulated.distance || 0;
+          const totalTime = result.data.accumulated.timeFormatted || "00:00:00";
+          const studentData = result.data.student;
+          
+          // 로컬에도 저장
+          const firstScanTime = result.data.accumulated.firstScanTime || new Date().toLocaleString('ko-KR');
+          const lastScanTime = new Date().toLocaleString('ko-KR');
+          saveLocalStats(qrText, scanCount, distance, totalTime, studentData.name, firstScanTime, lastScanTime);
+          updateOfflineCount();
+          
+          // 통계 표시
+          const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
+          displayStats(studentData, scanCount, distance, totalTime, isEnded);
+          
+          if (isEnded) {
+            endedStudents[qrText] = true;
+          }
+          
+          resumeScanning();
+          return;
         }
-      } else {
-        showMessage('오류: ' + result.message, 'error');
-      }
-    } catch (error) {
-      console.log('📴 온라인 실패, 오프라인 모드:', error.message);
-      
-      const parts = qrText.split('-');
-      if (parts.length === 2) {
-        const student = {
-          classNum: parseInt(parts[0]),
-          studentNum: parseInt(parts[1]),
-          name: parts[0] + '반 ' + parts[1] + '번'
-        };
-        saveToLocal(qrText, student);
-        updateDisplay(student);
-        showMessage('오프라인: 로컬에 저장되었습니다', 'success');
-      } else {
-        showMessage('오류: QR 형식 오류 (' + qrText + ')', 'error');
+      } catch (error) {
+        // 온라인 실패 → 오프라인 로직으로
       }
     }
+
+    // 오프라인 처리
+    const localData = getLocalStats(qrText);
+    const parts = qrText.split('-');
     
-    setTimeout(function() {
+    if (!parts || parts.length !== 2) {
+      alert('QR 형식 오류');
+      resumeScanning();
+      return;
+    }
+
+    const classNum = parseInt(parts[0]);
+    const studentNum = parseInt(parts[1]);
+    const studentName = localData ? localData.studentName : `${classNum}반 ${studentNum}번`;
+
+    let scanCount, distance, totalTime, firstScanTime;
+
+    if (localData) {
+      // 기존 로컬 데이터 누적
+      scanCount = localData.scanCount + 1;
+      distance = localData.distance + 0.2;
+      firstScanTime = localData.firstScanTime;
+      
+      // 시간 계산
+      const first = new Date(firstScanTime);
+      const now = new Date();
+      const diffSec = Math.round((now - first) / 1000);
+      const mins = Math.floor(diffSec / 60);
+      const secs = diffSec % 60;
+      totalTime = mins + ':' + String(secs).padStart(2, '0');
+    } else {
+      // 새로운 학생
+      scanCount = 1;
+      distance = 0.2;
+      firstScanTime = new Date().toLocaleString('ko-KR');
+      totalTime = '00:00:00';
+    }
+
+    const lastScanTime = new Date().toLocaleString('ko-KR');
+    saveLocalStats(qrText, scanCount, distance, totalTime, studentName, firstScanTime, lastScanTime);
+    updateOfflineCount();
+
+    // 통계 표시
+    const studentData = { name: studentName, studentNum: studentNum };
+    const isEnded = sessionMode === 'maxDistance' && distance >= maxDistance;
+    displayStats(studentData, scanCount, distance, totalTime, isEnded);
+
+    if (isEnded) {
+      endedStudents[qrText] = true;
+    }
+
+    resumeScanning();
+  }
+
+  function resumeScanning() {
+    setTimeout(() => {
+      lastQRData = null;
       qrCooldown = false;
       scanning = true;
-      document.getElementById('scanStatus').textContent = '🟢 스캔중';
-      scan();
-    }, 1500);
+    }, 300);
   }
 
-  function saveToLocal(qrText, student) {
-    const data = {
-      qr: qrText,
-      student: student,
-      timestamp: new Date().toISOString(),
-      sessionId: currentSessionId
-    };
-
-    if (useIndexedDB && db) {
-      try {
-        const transaction = db.transaction(['scans'], 'readwrite');
-        const store = transaction.objectStore('scans');
-        store.add(data);
-        
-        transaction.oncomplete = function() {
-          console.log('✅ IndexedDB 저장 완료');
-          updateLocalCount();
-        };
-      } catch (e) {
-        console.error('❌ IndexedDB 저장 오류, localStorage 사용:', e);
-        saveToLocalStorage(data);
-      }
-    } else {
-      saveToLocalStorage(data);
-    }
-  }
-
-  function saveToLocalStorage(data) {
-    try {
-      const scans = JSON.parse(localStorage.getItem('scans') || '[]');
-      scans.push(data);
-      localStorage.setItem('scans', JSON.stringify(scans));
-      console.log('✅ localStorage 저장 완료');
-      updateLocalCount();
-    } catch (e) {
-      console.error('❌ localStorage 저장 오류:', e);
-    }
-  }
-
-  function updateDisplay(student) {
-    document.getElementById('stats').style.display = 'block';
-    const count = parseInt(document.getElementById('scanCount').textContent) + 1;
-    document.getElementById('scanCount').textContent = count;
-    document.getElementById('lastStudent').style.display = 'block';
-    document.getElementById('lastName').textContent = student.name;
-  }
-
-  function showMessage(msg, type) {
-    const msgDiv = document.getElementById('message');
-    msgDiv.textContent = msg;
-    msgDiv.className = 'message show ' + (type || 'info');
-    
-    setTimeout(function() {
-      msgDiv.classList.remove('show');
-    }, 3000);
-  }
-
-  function updateLocalCount() {
-    if (useIndexedDB && db) {
-      try {
-        const transaction = db.transaction(['scans'], 'readonly');
-        const store = transaction.objectStore('scans');
-        const request = store.count();
-        
-        request.onsuccess = function() {
-          document.getElementById('localCount').textContent = request.result;
-          displayScanList();
-        };
-      } catch (e) {
-        console.error('카운트 오류, localStorage 사용');
-        updateLocalCountFromStorage();
-      }
-    } else {
-      updateLocalCountFromStorage();
-    }
-  }
-
-  function updateLocalCountFromStorage() {
-    try {
-      const scans = JSON.parse(localStorage.getItem('scans') || '[]');
-      document.getElementById('localCount').textContent = scans.length;
-      displayScanListFromStorage(scans);
-    } catch (e) {
-      console.error('localStorage 읽기 오류:', e);
-    }
-  }
-
-  function displayScanList() {
-    if (!useIndexedDB || !db) {
-      updateLocalCountFromStorage();
-      return;
-    }
-
-    try {
-      const transaction = db.transaction(['scans'], 'readonly');
-      const store = transaction.objectStore('scans');
-      const request = store.getAll();
-      
-      request.onsuccess = function() {
-        const scans = request.result;
-        displayScanListFromStorage(scans);
-      };
-    } catch (e) {
-      console.error('스캔 리스트 조회 오류:', e);
-      updateLocalCountFromStorage();
-    }
-  }
-
-  function displayScanListFromStorage(scans) {
-    const scanList = document.getElementById('scanList');
-    
-    if (scans.length === 0) {
-      scanList.style.display = 'none';
-      return;
-    }
-    
-    scanList.style.display = 'block';
-    scanList.innerHTML = '';
-    
-    scans.forEach(function(scan, index) {
-      const item = document.createElement('div');
-      item.className = 'scan-item';
-      
-      const time = new Date(scan.timestamp).toLocaleTimeString('ko-KR', { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        second: '2-digit'
-      });
-      
-      item.innerHTML = `
-        <div class="scan-info">
-          <p class="scan-qr">QR: ${scan.qr}</p>
-          <p class="scan-name">${scan.student.name}</p>
-          <p class="scan-time">${time}</p>
-        </div>
-        <button class="scan-delete" onclick="deleteScan(${index})">삭제</button>
-      `;
-      
-      scanList.appendChild(item);
-    });
-  }
-
-  function deleteScan(id) {
-    if (!confirm('이 스캔을 삭제하시겠습니까?')) return;
-    
-    if (useIndexedDB && db) {
-      const transaction = db.transaction(['scans'], 'readwrite');
-      const store = transaction.objectStore('scans');
-      store.delete(id);
-      
-      transaction.oncomplete = function() {
-        updateLocalCount();
-        showMessage('스캔이 삭제되었습니다', 'success');
-      };
-    } else {
-      const scans = JSON.parse(localStorage.getItem('scans') || '[]');
-      scans.splice(id, 1);
-      localStorage.setItem('scans', JSON.stringify(scans));
-      updateLocalCount();
-      showMessage('스캔이 삭제되었습니다', 'success');
-    }
-  }
-
+  // ================================================
+  // 데이터 업로드
+  // ================================================
   async function uploadData() {
-    showMessage('업로드 중...', 'info');
+    const allStats = getAllLocalStats();
     
-    let scans = [];
-    if (useIndexedDB && db) {
-      const transaction = db.transaction(['scans'], 'readonly');
-      const store = transaction.objectStore('scans');
-      const request = store.getAll();
-      
-      await new Promise((resolve) => {
-        request.onsuccess = function() {
-          scans = request.result;
-          resolve();
-        };
-      });
-    } else {
-      scans = JSON.parse(localStorage.getItem('scans') || '[]');
-    }
-    
-    if (scans.length === 0) {
-      showMessage('업로드할 데이터 없음', 'error');
+    if (allStats.length === 0) {
+      alert('업로드할 데이터 없음');
       return;
     }
     
+    if (!confirm(`${allStats.length}개 데이터를 업로드하시겠습니까?`)) {
+      return;
+    }
+
     let success = 0;
     let fail = 0;
-    
-    for (let i = 0; i < scans.length; i++) {
-      const scan = scans[i];
-      
+
+    for (let stat of allStats) {
       try {
-        const res = await fetch('https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(scan.qr) + '&sessionId=' + encodeURIComponent(scan.sessionId));
-        const result = await res.json();
+        const url = 'https://script.google.com/macros/s/AKfycbxC92EzuvA5WamPJ1yNwgFleCLgjSgoKdpUm3e-rkBjFawWqseG9hXZ0I7ePQwOa1sP/exec?qr=' + encodeURIComponent(stat.qrText) + '&sessionId=' + encodeURIComponent(stat.sessionId);
+        
+        const result = await fetchWithRetry(url, 2);
         
         if (result.success) {
           success++;
-          deleteFromDB(scan.id || i);
         } else {
           fail++;
         }
-      } catch (e) {
-        console.error('업로드 오류:', e);
+      } catch (error) {
         fail++;
       }
     }
-    
-    showMessage('업로드 완료: 성공 ' + success + '개, 실패 ' + fail + '개', 'success');
-    updateLocalCount();
-  }
 
-  function deleteFromDB(id) {
-    if (useIndexedDB && db) {
-      const transaction = db.transaction(['scans'], 'readwrite');
-      const store = transaction.objectStore('scans');
-      store.delete(id);
+    if (success > 0) {
+      // 성공한 것들 삭제
+      for (let i = 0; i < success && i < allStats.length; i++) {
+        const key = `localStats_${allStats[i].qrText}`;
+        localStorage.removeItem(key);
+      }
+      updateOfflineCount();
+      alert(`✅ ${success}개 업로드 완료`);
+    } else {
+      alert('❌ 업로드 실패');
     }
   }
 
   function clearData() {
-    if (confirm('정말로 로컬 데이터를 모두 삭제하시겠습니까? 되돌릴 수 없습니다!')) {
-      clearLocalData();
-      document.getElementById('scanCount').textContent = '0';
-      document.getElementById('stats').style.display = 'none';
-      showMessage('모든 데이터가 삭제되었습니다', 'success');
-    }
-  }
-
-  function clearLocalData() {
-    if (useIndexedDB && db) {
-      const transaction = db.transaction(['scans'], 'readwrite');
-      const store = transaction.objectStore('scans');
-      store.clear();
-      
-      transaction.oncomplete = function() {
-        updateLocalCount();
-      };
-    } else {
-      localStorage.removeItem('scans');
-      updateLocalCount();
+    if (confirm('정말로 로컬 데이터를 모두 삭제하시겠습니까?')) {
+      const allStats = getAllLocalStats();
+      for (let stat of allStats) {
+        const key = `localStats_${stat.qrText}`;
+        localStorage.removeItem(key);
+      }
+      updateOfflineCount();
+      alert('✅ 삭제됨');
     }
   }
 
   // ================================================
-  // 페이스 모달 표시
+  // 일괄 종료
   // ================================================
-  function showPaceModal(accumulated, pace) {
-    if (!pace) {
-      console.log('❌ 페이스 데이터 없음');
+  function batchEndSession() {
+    const allStats = getAllLocalStats();
+    
+    if (allStats.length === 0) {
+      alert('스캔된 학생이 없습니다');
       return;
     }
-    
-    console.log('📊 페이스 모달 표시:', pace);
-    
-    const modal = document.getElementById('paceModal');
-    const modalCurrentPace = document.getElementById('modalCurrentPace');
-    const targetsContainer = document.getElementById('paceTargetsContainer');
-    
-    const currentMin = String(pace.current.minutes).padStart(2, '0');
-    const currentSec = String(pace.current.seconds).padStart(2, '0');
-    modalCurrentPace.textContent = currentMin + ':' + currentSec;
-    
-    targetsContainer.innerHTML = '';
-    pace.targets.forEach(target => {
-      const html = `
-        <div class="pace-target-item">
-          <strong>⚡ ${target.targetPace}:00 pace 도달:</strong>
-          <p>→ 다음 1km를 ${target.timeNeeded}에 완주하세요</p>
-        </div>
-      `;
-      targetsContainer.innerHTML += html;
-    });
-    
-    modal.classList.add('show');
-    
-    setTimeout(() => {
-      closeModal();
-    }, 2000);
-    
-    modal.onclick = function(e) {
-      if (e.target === modal) {
-        closeModal();
+
+    if (confirm(`${allStats.length}명 학생을 종료하시겠습니까?\n(현재 시간으로 기록됩니다)`)) {
+      const now = new Date();
+
+      // 모든 학생의 lastScanTime을 현재 시간으로 업데이트
+      for (let stat of allStats) {
+        const first = new Date(stat.firstScanTime);
+        const diffSec = Math.round((now - first) / 1000);
+        const mins = Math.floor(diffSec / 60);
+        const secs = diffSec % 60;
+        const totalTime = mins + ':' + String(secs).padStart(2, '0');
+
+        saveLocalStats(
+          stat.qrText,
+          stat.scanCount,
+          stat.distance,
+          totalTime,
+          stat.studentName,
+          stat.firstScanTime,
+          now.toLocaleString('ko-KR')
+        );
       }
-    };
-  }
-  
-  function closeModal() {
-    const modal = document.getElementById('paceModal');
-    modal.classList.remove('show');
+
+      stopCamera();
+      alert('✅ 모든 학생 종료됨');
+      
+      setTimeout(() => {
+        localStorage.clear();
+        location.reload();
+      }, 2000);
+    }
   }
 
   // ================================================
-  // 초기화
+  // 시작
   // ================================================
-  console.log('🚀 페이지 로드 완료');
-  document.getElementById('debugInfo').classList.add('show');
-  initializeStorage();
+  init();
+  
+  if ('wakeLock' in navigator) {
+    navigator.wakeLock.request('screen').catch(err => {
+      console.log('Wake Lock 실패:', err);
+    });
+  }
 </script>
 
 </body>
