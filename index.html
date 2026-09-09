@@ -879,28 +879,19 @@
       if (!scanning) return;
       
       try {
-        frameCount++;
-        
         if (video.readyState === video.HAVE_ENOUGH_DATA) {
           canvas.width = video.videoWidth;
           canvas.height = video.videoHeight;
           
-          if (canvas.width === 0 || canvas.height === 0) return;
-          
           canvasContext.drawImage(video, 0, 0);
           const imageData = canvasContext.getImageData(0, 0, canvas.width, canvas.height);
           
-          if (typeof jsQR === 'function') {
-            const code = jsQR(imageData.data, canvas.width, canvas.height);
-            
-            if (code && !qrCooldown) {
-              if (lastQRData === code.data) {
-                return;
-              }
-              
+          const code = jsQR(imageData.data, canvas.width, canvas.height);
+          
+          if (code && !qrCooldown) {
+            if (lastQRData !== code.data) {
               lastQRData = code.data;
               qrCooldown = true;
-              
               handleQRData(code.data);
             }
           }
@@ -908,7 +899,7 @@
       } catch (e) {
         console.error('스캔 오류:', e);
       }
-    }, 50);
+    }, 30);
   }
 
   async function handleQRData(qrText) {
@@ -920,7 +911,7 @@
       return;
     }
 
-    // 처리 중 표시
+    // ⏳ 처리 중 표시
     const statsDiv = document.getElementById('stats');
     const icon = document.getElementById('statsIcon');
     const title = document.getElementById('statsTitle');
@@ -932,8 +923,7 @@
     title.textContent = '처리 중...';
     info.innerHTML = '';
 
-    // 먼저 로컬 데이터 확인 (온/오프라인 모두 사용)
-    const localData = getLocalStats(qrText);
+    // QR 형식 확인
     const parts = qrText.split('-');
     
     if (!parts || parts.length !== 2) {
